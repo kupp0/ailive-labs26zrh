@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% from "macros.html" import action, card %}
+{% block content %}
+{% call card("Ask the read-only analyst to write") %}
+{{ action("s11-ask-write", "Try it") }}
+{% endcall %}
+{% call card("What each service can reach") %}
+{{ action("s11-reach", "Check both services", primary=false) }}
+{% endcall %}
+{% endblock %}

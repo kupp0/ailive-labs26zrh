@@ -1,0 +1,115 @@
+{# Result fragment. Same block vocabulary in the Lab 10 and Lab 11 consoles. #}
+{% macro render(blocks) %}
+{% for b in blocks %}
+{% if b.type == 'status' %}
+<div class="status status-{{ b.level }}">{{ b.text }}</div>
+
+{% elif b.type == 'heading' %}
+<div class="label">{{ b.text }}</div>
+
+{% elif b.type == 'term' %}
+<div class="term"><div class="term-title">{{ b.title }}</div><div class="term-text">{{ b.text }}</div></div>
+
+{% elif b.type == 'code' %}
+{% if b.label %}<div class="label">{{ b.label }}</div>{% endif %}
+<pre class="code">{{ b.text }}</pre>
+
+{% elif b.type == 'query' %}
+<details class="details query"><summary>Show query <span class="muted">· {{ b.lines }} lines · {{ '{:,}'.format(b.chars) }} chars</span></summary><pre class="code">{{ b.text }}</pre></details>
+
+{% elif b.type == 'metrics' %}
+<div class="metrics">
+  {% for m in b['items'] %}
+  <div class="metric">
+    <div class="metric-label">{{ m.label }}</div>
+    <div class="metric-value">{{ m.value }}</div>
+    <div class="metric-hint">{{ m.hint }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+{% elif b.type == 'table' %}
+{% set has_origin = b.origin_idx is defined and b.origin_idx is not none %}
+{% if b.chips %}
+<div class="chips">
+  {% for name, n, colour in b.chips %}<span class="chip" style="--c:{{ colour }}">{{ name }} · {{ '{:,}'.format(n) }}</span>{% endfor %}
+</div>
+{% endif %}
+<div class="table-wrap">
+  <table>
+    <thead><tr>{% if b.fills %}<th></th>{% endif %}{% for col in b.columns %}<th>{{ col }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for row in b.rows %}
+      {% set origin = row[b.origin_idx] if has_origin else none %}
+      <tr {% if origin %}style="--row:{{ b.colours.get(origin, '#5F6368') }}" class="tinted"{% endif %}>
+        {% if b.fills %}
+        <td><button type="button" class="btn btn-mini" data-fill='{{ b.fills[loop.index0] | tojson }}'>Use</button></td>
+        {% endif %}
+        {% for cell in row %}<td>{{ '' if cell is none else cell }}</td>{% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="caption">{{ b.caption }}</div>
+
+{% elif b.type == 'json' %}
+<div class="label">{{ b.title }}</div>
+<pre class="code">{{ b.data | tojson(indent=2) }}</pre>
+
+{% elif b.type == 'picker' %}
+<div class="picker" data-pick-form="{{ b.form }}" data-pick-field="{{ b.field }}">
+  {% for chip in b.chips %}
+  <button type="button" class="pick{{ ' pick-on' if loop.first }}" data-pick="{{ chip.value }}">
+    <span class="pick-label">{{ chip.label }}</span><span class="pick-hint">{{ chip.hint }}</span>
+  </button>
+  {% endfor %}
+</div>
+
+{% elif b.type == 'graph' %}
+<div class="graph-viz" data-layout="{{ b.layout }}" data-graph='{{ b.elements | tojson }}'></div>
+<div class="graph-legend">
+  <span class="lg lg-customer">Customer</span><span class="lg lg-product">Product</span><span class="lg lg-category">Category</span>
+  {% if b.origins %}<span class="lg lg-origin">edge colour = the only engine holding that purchase (BigQuery · AlloyDB · Spanner)</span>{% endif %}
+  <span class="muted">rings = hops from the customer · click a recommendation to trace its evidence</span>
+</div>
+
+{% elif b.type == 'split' %}
+<div class="split">
+  {% for title, inner in b.cols %}
+  <div class="split-col"><div class="split-title">{{ title }}</div>{{ render(inner) }}</div>
+  {% endfor %}
+</div>
+
+{% elif b.type == 'agent' %}
+<div class="agent">
+  <div class="label">Question sent</div>
+  <pre class="code code-q">{{ b.question }}</pre>
+  {% if b.route and not b.route.error %}
+  <div class="route {{ 'route-ok' if b.route.wired else 'route-unwired' }}">
+    <span class="route-tag">router</span>
+    <code>{{ b.route.intent }}</code> →
+    <code>{{ b.route.specialist or 'nothing wired for this intent' }}</code>
+  </div>
+  {% elif b.route and b.route.error %}
+  <div class="status status-warn">route: {{ b.route.error }}</div>
+  {% endif %}
+  {% if b.answer.error %}
+  <div class="status status-error">{{ b.answer.error }}</div>
+  {% else %}
+  <div class="answer">{{ b.answer.response or '(no text returned)' }}</div>
+  {% if b.answer.agents_used %}
+  <div class="trace"><span class="label">agents</span>{% for a in b.answer.agents_used %}<span class="trace-item">{{ a }}</span>{% endfor %}</div>
+  {% endif %}
+  {% if b.answer.tools_called %}
+  <div class="trace"><span class="label">tools</span>{% for t in b.answer.tools_called %}<span class="trace-item">{{ t }}</span>{% endfor %}</div>
+  {% endif %}
+  {% if b.answer.sql %}
+  <details class="details"><summary>SQL the agent ran</summary><pre class="code">{{ b.answer.sql }}</pre></details>
+  {% endif %}
+  {% endif %}
+</div>
+{% endif %}
+{% endfor %}
+{% endmacro %}
+{{ render(blocks) }}

@@ -1,0 +1,65 @@
+# ==============================================================================
+# Lab 11 — dispatch agent Cloud Run service
+#
+# The one line that matters is serviceAccountName.
+#
+# This service runs as lab11-dispatch-sa, which holds bigquery.dataViewer,
+# bigquery.jobUser, bigquery.connectionUser and spanner.databaseReader — and
+# nothing that can write to anything. So when a participant asks this agent to
+# insert an order, the refusal does not come from the instruction, and it does
+# not come from a tool filter. It comes from IAM, after the request has left the
+# model entirely.
+#
+# TRANSACT_URL is what makes a write possible at all: it points at a SECOND
+# service running as a SECOND identity. deploy.sh deploys that one first so this
+# value exists.
+# ==============================================================================
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ${AGENT_SERVICE}
+  annotations:
+    run.googleapis.com/launch-stage: BETA
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/execution-environment: gen2
+        # One instance: the A2A surface (Gemini Enterprise, Lab 12) keeps sessions
+        # and tasks in memory, so a follow-up turn on another instance would lose
+        # its context. Lab traffic is a single participant; one instance suffices.
+        autoscaling.knative.dev/maxScale: "1"
+    spec:
+      serviceAccountName: ${AGENT_SA}
+      timeoutSeconds: 600
+      containers:
+        - name: agent
+          image: ${AGENT_IMAGE}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GOOGLE_CLOUD_PROJECT
+              value: "${PROJECT_ID}"
+            # Gemini 3.x is served ONLY from location `global` on Vertex. A
+            # regional value here fails the first turn with a 404 naming a model
+            # that demonstrably exists.
+            - name: GOOGLE_CLOUD_LOCATION
+              value: "global"
+            - name: GOOGLE_GENAI_USE_VERTEXAI
+              value: "true"
+            - name: BQ_SOURCE_DATASET_ID
+              value: "${BQ_SOURCE_DATASET_ID}"
+            - name: BQ_ZEROETL_DATASET_ID
+              value: "${BQ_ZEROETL_DATASET_ID}"
+            - name: SPANNER_INSTANCE
+              value: "${SPANNER_INSTANCE}"
+            - name: SPANNER_DATABASE
+              value: "${SPANNER_DATABASE}"
+            - name: GLOSSARY_LOCATION
+              value: "${GLOSSARY_LOCATION}"
+            - name: TRANSACT_URL
+              value: "${TRANSACT_URL}"
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi

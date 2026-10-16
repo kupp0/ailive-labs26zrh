@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% from "macros.html" import action, card %}
+{% block content %}
+{% call card("1 · Pick an at-risk customer") %}
+<form id="s10-pick" class="pick-form" onsubmit="return false"><input type="hidden" name="customer_id" required></form>
+{{ action("s10-at-risk", "Find at-risk customers", note="latest item Returned or Cancelled · same rule as From Data to Agent") }}
+{% endcall %}
+{% call card("2 · Operational: what did this customer just do? · Spanner Graph") %}
+{{ action("s10-ops-chain", "Read the live order chain", form="s10-pick", note="EcommerceOpsGraph · Spanner rows only") }}
+{% endcall %}
+{% call card("3 · Analytical: what should we offer them? · BigQuery Graph") %}
+{{ action("s10-next-best", "Recommend across three engines", form="s10-pick", note="From Data to Agent query · UnifiedEcommerceGraph") }}
+{% endcall %}
+{% call card("4 · The dedup trap, side by side") %}
+{{ action("s10-dedup-trap", "Count paths vs count purchases", primary=false, form="s10-pick", note="same query · two DISTINCTs apart") }}
+{% endcall %}
+{% call card("5 · Let the agent choose the engine") %}
+{{ action("s10-ask-operational", "Ask something operational", primary=false) }}
+{{ action("s10-ask-both", "Ask for both engines", primary=false) }}
+{{ action("s10-ask-recommend", "Ask for a recommendation", primary=false, form="s10-pick", note="same query as card 3") }}
+{% endcall %}
+<details class="details card">
+  <summary>Recovery: the graph is missing, or I changed the views</summary>
+  {{ action("s10-declare-graph", "Declare the unified property graph", primary=false) }}
+</details>
+{% endblock %}

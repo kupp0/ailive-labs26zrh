@@ -1,0 +1,59 @@
+# ==============================================================================
+# Lab 10 — lab runner Cloud Run service
+#
+# Runs as lab-runner, the service account that stands in for the PARTICIPANT.
+# A Cloud Run service cannot run as a human, so the split that Step 7
+# demonstrates is expressed as two service accounts against one policy tag:
+#
+#   lab-runner  -> categoryFineGrainedReader -> customers.email comes back raw
+#   agent       -> maskedReader              -> the same column comes back XXXXX
+#
+# Neither service asks for its treatment. BigQuery decides, per identity.
+#
+# Stateless FastAPI: no session affinity. LAB11_CONSOLE_URL feeds the lab
+# switcher; empty until Lab 11's console is deployed (either deploy.sh fills it).
+# ==============================================================================
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ${RUNNER_SERVICE}
+  annotations:
+    run.googleapis.com/launch-stage: BETA
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/execution-environment: gen2
+        autoscaling.knative.dev/maxScale: "3"
+    spec:
+      serviceAccountName: ${RUNNER_SA}
+      timeoutSeconds: 900
+      containers:
+        - name: lab-runner
+          image: ${RUNNER_IMAGE}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GOOGLE_CLOUD_PROJECT
+              value: "${PROJECT_ID}"
+            - name: AGENT_URL
+              value: "${AGENT_URL}"
+            - name: BQ_DATASET_ID
+              value: "${BQ_DATASET_ID}"
+            - name: BQ_GRAPH_DATASET_ID
+              value: "${BQ_GRAPH_DATASET_ID}"
+            - name: GLOSSARY_LOCATION
+              value: "${GLOSSARY_LOCATION}"
+            - name: AGENT_SA
+              value: "${AGENT_SA}"
+            - name: RUNNER_SA
+              value: "${RUNNER_SA}"
+            - name: LAB11_CONSOLE_URL
+              value: "${LAB11_CONSOLE_URL}"
+            - name: GE_PUBLISHER_URL
+              value: "${GE_PUBLISHER_URL}"
+          resources:
+            limits:
+              cpu: "1"
+              # No pandas/pyarrow.
+              memory: 512Mi

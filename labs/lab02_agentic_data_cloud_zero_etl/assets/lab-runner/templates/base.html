@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lab {{ lab_number }} · Step {{ screen.step }} · Lab console</title>
+  <link rel="stylesheet" href="/static/console.css?v={{ ASSET_V }}">
+  <script src="/static/vendor/cytoscape-3.34.3.min.js" defer></script>
+  <script src="/static/console.js?v={{ ASSET_V }}" defer></script>
+</head>
+<body>
+  {#- Same layout in the Lab 10 and Lab 11 consoles (each lab owns its copy).
+      The guide is the script: this page only labels, runs and shows. -#}
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">{{ lab_number }}</span>
+      <div>
+        <div class="brand-title">Lab console</div>
+        <div class="brand-sub">read <b>user_guide.md</b> · act here</div>
+      </div>
+    </div>
+
+    <nav class="labtabs" aria-label="Labs">
+      {% for lab in labs %}
+      {% if lab.current %}
+      <span class="labtab active" aria-current="page"><span class="labtab-num">{{ lab.title }}</span></span>
+      {% elif lab.url %}
+      <a class="labtab" href="{{ lab.url }}/"><span class="labtab-num">{{ lab.title }}</span><span class="labtab-go">↗</span></a>
+      {% else %}
+      <span class="labtab off" title="{{ lab.hint }}"><span class="labtab-num">{{ lab.title }}</span><span class="labtab-title">not deployed yet</span></span>
+      {% endif %}
+      {% endfor %}
+    </nav>
+
+    <div class="topbar-right">
+      <span class="pill mono" title="Google Cloud project">{{ project }}</span>
+      <a class="pill pill-link" href="/reference" target="_blank" rel="noopener">Reference diagrams ↗</a>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="sidenav" aria-label="Guide steps">
+      <div class="nav-label">Lab {{ lab_number }} · your route through the guide</div>
+      {% for s in route %}
+      {% if s.step in screen_steps %}
+      <a class="nav-item {{ 'active' if s.step == screen.step }}" href="/step/{{ s.step }}">
+        <span class="nav-num">{{ s.step }}</span><span class="nav-title">{{ s.title }}</span>
+        <span class="where where-{{ s.where | lower }}">{{ '🖥️→🌐' if s.where == 'BOTH' else '🌐' }}</span>
+      </a>
+      {% else %}
+      <div class="nav-item nav-terminal {{ 'done' if s.step < screen.step }}" tabindex="0" aria-describedby="tip-{{ s.step }}">
+        <span class="nav-num">{{ s.step }}</span><span class="nav-title">{{ s.title }}</span>
+        <span class="where where-terminal">🖥️</span>
+        <span class="nav-tip" role="tooltip" id="tip-{{ s.step }}">
+          <b>🖥️ Terminal step: no console screen</b>
+          This step runs entirely in the terminal of your Cloud Workstation.
+          Follow <b>Step {{ s.step }}</b> in the user guide. You have not
+          missed anything here.
+        </span>
+      </div>
+      {% endif %}
+      {% endfor %}
+      <div class="legend"><span>🌐 console</span><span>🖥️→🌐 both</span><span>🖥️ terminal only</span></div>
+
+      <div class="nav-label nav-gap">Identities</div>
+      {% for label, sa, cap in identities %}
+      <div class="identity">
+        <div class="identity-label">{{ label }}</div>
+        <div class="mono identity-sa">{{ sa }}</div>
+        <div class="identity-cap">{{ cap }}</div>
+      </div>
+      {% endfor %}
+      <div class="engines">
+        {% for name, colour, on in engines_chips %}
+        <span class="chip {{ '' if on else 'chip-off' }}" style="--c:{{ colour }}">{{ name }}{{ '' if on else ' · off' }}</span>
+        {% endfor %}
+      </div>
+    </nav>
+
+    <main class="content">
+      <div class="step-head">
+        <div class="step-kicker">Lab {{ lab_number }} · Guide Step {{ screen.step }} of {{ last_step }}
+          <span class="where-badge where-{{ screen.where | lower }}">{{ '🖥️→🌐 BOTH' if screen.where == 'BOTH' else '🌐 CONSOLE' }}</span>
+        </div>
+        <h1>Step {{ screen.step }} · {{ screen.title }}</h1>
+        <div class="guide-hint">📖 Read <b>Step {{ screen.step }}</b> in the guide first. It says what to press and what the result means.</div>
+        {% if not agent_url %}
+        <div class="status status-warn">AGENT_URL is unset: agent buttons will fail. Run <code>bash deploy.sh</code>.</div>
+        {% endif %}
+      </div>
+
+      {% block content %}{% endblock %}
+
+      <footer class="next">
+        {% if next_step and next_step.step in screen_steps %}
+        Next: <a class="next-link" href="/step/{{ next_step.step }}">guide Step {{ next_step.step }} · {{ next_step.title }} →</a>
+        {% elif next_step %}
+        Next: <b>guide Step {{ next_step.step }} · {{ next_step.title }}</b> <span class="muted">in your terminal</span>
+        {% else %}
+        Next: <b>the recap</b> at the end of the guide
+        {% endif %}
+        {% for lab in labs if not lab.current and lab.num > lab_number and lab.url %}
+        {% if not next_step or next_step.step not in screen_steps %}
+        <div class="next-lab">Finished this lab? <a class="next-link" href="{{ lab.url }}/">Open the {{ lab.title }} console ↗</a></div>
+        {% endif %}
+        {% endfor %}
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "macros.html" import action, card %}
+{% block content %}
+{% call card("Two services, two identities") %}
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Service</th><th>Runs as</th><th>Treatment of customers.email</th></tr></thead>
+    <tbody>
+      {% for label, sa, cap in identities %}
+      <tr><td>{{ label }}</td><td class="mono">{{ sa }}</td><td>{{ cap }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="kv"><span>agent</span><code>{{ agent_url or 'not deployed' }}</code></div>
+{% endcall %}
+{% call card("1 · Agent health") %}
+{{ action("s6-health", "Check the agent is deployed and healthy") }}
+{% endcall %}
+{% call card("2 · First grounded answer") %}
+{{ action("s6-ask", "Ask: What is our revenue?", primary=false, note="expect search_entries before any SQL") }}
+{% endcall %}
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "macros.html" import action, card, terminal %}
+{% block content %}
+{% call card("1 · The model: three node labels, two edge labels") %}
+<div class="graph-viz graph-viz-schema" data-layout="schema" data-graph='{{ SCHEMA_GRAPH | tojson }}'></div>
+<div class="caption">graph_customers · graph_products · graph_categories — PURCHASED from graph_purchases, IN_CATEGORY from graph_product_category</div>
+{% endcall %}
+{% call card("2 · Check the edge key before trusting any traversal") %}
+{{ action("s9-edge-key", "Check the edge key", note="rows vs distinct order_item_id vs distinct order_id") }}
+{% endcall %}
+{% call card("3 · Declare the graph") %}
+{{ action("s9-declare", "Declare the property graph", primary=false, note="metadata only · no data copied") }}
+{% endcall %}
+{% call card("4 · Pick an at-risk customer") %}
+<form id="s9-pick" class="pick-form" onsubmit="return false"><input type="hidden" name="customer_id" required></form>
+{{ action("s9-at-risk", "Find at-risk customers", note="latest item Returned or Cancelled") }}
+{% endcall %}
+{% call card("5 · Next best product: plain SQL and GQL, side by side") %}
+{{ action("s9-next-best", "Recommend for the selected customer", form="s9-pick", note="cache off · same question twice") }}
+{% endcall %}
+{% call card("6 · One more hop: peers of peers") %}
+{{ action("s9-next-best-2hop", "Recommend one hop further", primary=false, form="s9-pick", note="top 8 peers · GQL +1 hop · SQL +2 joins") }}
+{% endcall %}
+{{ terminal("optional: ask agy for the next best product through the BigQuery MCP server", "Step 9 · 7") }}
+{% endblock %}

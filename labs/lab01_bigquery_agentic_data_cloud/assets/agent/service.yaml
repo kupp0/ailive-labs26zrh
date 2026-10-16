@@ -1,0 +1,54 @@
+# ==============================================================================
+# Lab 10 — agent Cloud Run service
+#
+# The one line that matters for this lab is serviceAccountName.
+#
+# The agent runs as ecommerce-analyst-agent, which holds Masked Reader on the
+# SENSITIVE policy tag and NOT Fine-Grained Reader. So when it queries
+# customers.email it receives XXXXX@domain -- not because the code asks for a
+# mask, not because the instruction tells it to be careful, but because
+# BigQuery resolves the policy per identity before a row leaves the engine.
+#
+# The participant cannot prompt their way past it, and neither can a bug in
+# agent.py. That is what "the guardrail lives in the platform" means, made
+# structural: it is a property of the deployment, not of the code.
+# ==============================================================================
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ${AGENT_SERVICE}
+  annotations:
+    run.googleapis.com/launch-stage: BETA
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/execution-environment: gen2
+        # One instance: the A2A surface (Gemini Enterprise, Lab 12) keeps sessions
+        # and tasks in memory, so a follow-up turn on another instance would lose
+        # its context. Lab traffic is a single participant; one instance suffices.
+        autoscaling.knative.dev/maxScale: "1"
+    spec:
+      serviceAccountName: ${AGENT_SA}
+      timeoutSeconds: 300
+      containers:
+        - name: agent
+          image: ${AGENT_IMAGE}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GOOGLE_CLOUD_PROJECT
+              value: "${PROJECT_ID}"
+            # Gemini 3.x is served ONLY from location `global` on Vertex.
+            # A regional value here fails the first turn with a 404 naming a
+            # model that demonstrably exists.
+            - name: GOOGLE_CLOUD_LOCATION
+              value: "global"
+            - name: GOOGLE_GENAI_USE_VERTEXAI
+              value: "true"
+            - name: BQ_DATASET_ID
+              value: "${BQ_DATASET_ID}"
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi

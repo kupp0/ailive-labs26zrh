@@ -1,0 +1,1086 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Agentic Data Cloud — Zero-ETL Federation Reference Diagrams</title>
+<!--
+  ONE FILE PER LAB, AND THEY ARE NOT THE SAME FILE.
+    labs/10_bigquery_agentic_data_cloud/src/lab-runner/diagrams.html  — 3 tabs, Lab 10 only
+    labs/11_agentic_data_cloud_zero_etl/src/lab-runner/diagrams.html  — 4 Lab 11 tabs + 1 recap
+
+  This is the LAB 11 copy. The two files were once byte-identical and showed all
+  five diagrams in both runners, which meant a Lab 10 participant met AlloyDB,
+  Spanner and a five-specialist router before building any of it. They are now
+  scoped per lab.
+
+  WHAT MUST STAY IN SYNC
+  ----------------------
+  Lab 11 reproduces Lab10Architecture and Lab10ERD verbatim for its "Recap: Lab 10
+  Foundation" tab. Those two functions must remain character-for-character identical
+  to Lab 10's copies -- diff them if you touch either:
+    diff <(sed -n '/^function Lab10Architecture/,/^}/p' labs/10_*/src/lab-runner/diagrams.html) \
+         <(sed -n '/^function Lab10Architecture/,/^}/p' labs/11_*/src/lab-runner/diagrams.html)
+  Everything else is deliberately per-lab and must NOT be copied across.
+
+  WHY A FILE PER LAB RATHER THAN ONE SHARED FILE
+  ----------------------------------------------
+  Each runner's Docker build context is its own lab-runner/ directory, so a shared
+  file outside it cannot be COPYed in without changing both Dockerfiles and both
+  deploy scripts. That constraint is real and is why the recap is duplicated rather
+  than imported.
+
+  WHY THIS IS ONE FILE WITH NO BUILD STEP
+  ---------------------------------------
+  The obvious shape is `npm create vite@latest`. Two constraints rule it out,
+  both already documented in this repo:
+
+    Terraform cannot install anything on a participant workstation. It runs on
+    the DEPLOYMENT host, and the scaffolding engine seals assets.zip BEFORE
+    `terraform apply` -- see labs/10.../infra/main.tf section 15, which removed a
+    local_file resource for exactly this reason.
+
+    npm is not reliably reachable. Corp environments run an Airlock that blocks
+    npx and package installs; demo2's alloydb_specialist.py keeps a hosted-HTTP
+    fallback because of it.
+
+  So React and Babel come from a pinned CDN and the app is one file. It embeds
+  is served by the lab console at /reference and also opens standalone with
+  `python3 -m http.server`.
+
+  TWO ADAPTATIONS FROM THE ORIGINAL SOURCE
+    `import { useState } from "react"` -> `const { useState } = React`
+    `export default function App()`    -> `function App()` + an explicit render
+  There is no bundler here, so ESM syntax would not resolve.
+-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.2/babel.min.js"></script>
+<style>
+  /* body carries the dark background explicitly so no light gutter shows,
+     whether served by the console or opened standalone. */
+  html, body { margin: 0; padding: 0; background: #0F1117; }
+  #root { min-height: 100vh; }
+  * { box-sizing: border-box; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: #0F1117; }
+  ::-webkit-scrollbar-thumb { background: #2A2E3B; border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3D4255; }
+</style>
+<div id="root"></div>
+
+<script type="text/babel">
+/* @jsxRuntime classic */
+/* `import`/`export` removed: React and ReactDOM are CDN globals here. */
+const { useState } = React;
+
+// The governed revenue figure for THIS participant's project. The lab runner
+// substitutes the token below with the result of
+//   SELECT SUM(total_amount) FROM <dataset>.orders WHERE status = 'Complete'
+// before serving the page, so the sequence diagram shows the number the
+// participant will actually see. A hardcoded figure is wrong twice over: the
+// seeded sample differs per project, and a number that does not match what they
+// just measured undermines the point the diagram is making.
+// Opened standalone (python3 -m http.server) the token is left in place and the
+// neutral wording below is used instead.
+const _REV = "__GOVERNED_REVENUE__";
+const GOVERNED_REVENUE = _REV.indexOf("__") === 0 ? "your project's governed revenue" : _REV;
+
+const COLORS = {
+  bg: "#0F1117",
+  surface: "#181B24",
+  surfaceHover: "#1E2230",
+  border: "#2A2E3B",
+  borderAccent: "#3D4255",
+  text: "#E8E9ED",
+  textMuted: "#8B8FA3",
+  textDim: "#5C6078",
+  blue: "#4285F4",
+  blueDim: "#1A3A6E",
+  green: "#34A853",
+  greenDim: "#1B4D2E",
+  coral: "#EA4335",
+  coralDim: "#5C1A14",
+  amber: "#FBBC04",
+  amberDim: "#5C4502",
+  purple: "#A142F4",
+  purpleDim: "#3A1A5C",
+  teal: "#24C1E0",
+  tealDim: "#0E4D5C",
+};
+
+const TabButton = ({ active, onClick, children, icon, recap }) => (
+  <button
+    onClick={onClick}
+    style={{
+      padding: "10px 16px",
+      background: active ? (recap ? COLORS.amberDim : COLORS.blueDim) : "transparent",
+      border: recap
+        ? `1px dashed ${active ? COLORS.amber : COLORS.border}`
+        : `1px solid ${active ? COLORS.blue : "transparent"}`,
+      borderRadius: 8,
+      color: active ? (recap ? COLORS.amber : COLORS.blue) : COLORS.textMuted,
+      fontSize: 13,
+      fontWeight: active ? 600 : 400,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      transition: "all 0.15s ease",
+      whiteSpace: "nowrap",
+    }}
+  >
+    <span style={{ fontSize: 15 }}>{icon}</span>
+    {children}
+  </button>
+);
+
+const StatusBadge = ({ status }) => {
+  // Release status (GA / Preview) is not shown: it goes stale. See the guide's note.
+  if (status === "GA" || status === "Preview") return null;
+  const map = {
+    GA: { bg: COLORS.greenDim, color: COLORS.green, border: "#2D6B3F" },
+    Preview: { bg: COLORS.amberDim, color: COLORS.amber, border: "#7A5C0A" },
+    "Read-Only": { bg: COLORS.blueDim, color: COLORS.blue, border: "#2A5298" },
+    "Write-Capable": { bg: COLORS.coralDim, color: COLORS.coral, border: "#8C2E24" },
+  };
+  const s = map[status] || map.GA;
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "2px 8px",
+        borderRadius: 4,
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: "0.04em",
+        background: s.bg,
+        color: s.color,
+        border: `1px solid ${s.border}`,
+      }}
+    >
+      {status}
+    </span>
+  );
+};
+</script>
+
+<script type="text/babel">
+/* @jsxRuntime classic */
+
+// ─── DIAGRAM 1: Lab 10 Architecture ────────────────────────────
+function Lab10Architecture() {
+  return (
+    <div style={{ padding: 32 }}>
+      <div style={{ marginBottom: 32 }}>
+        <h2 style={{ color: COLORS.text, fontSize: 22, fontWeight: 700, margin: 0 }}>
+          From Data to Agent — Architecture Building Blocks
+        </h2>
+        <p style={{ color: COLORS.textMuted, fontSize: 14, margin: "8px 0 0", lineHeight: 1.5 }}>
+          BigQuery + Knowledge Catalog + Column-Level Security + BigQuery Graph + ADK
+        </p>
+      </div>
+
+      <LayerContainer label="Participant" color={COLORS.purple} dimColor={COLORS.purpleDim}>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <ArchBox icon="⌨" title="Terminal" sub="agy CLI + bash" color={COLORS.purple} />
+          <ArchBox icon="🌐" title="Browser" sub="lab console" color={COLORS.purple} />
+        </div>
+      </LayerContainer>
+
+      <FlowArrow labels={["HTTPS", "agy -i prompts"]} />
+
+      <LayerContainer label="Cloud Run · us-central1" color={COLORS.blue} dimColor={COLORS.blueDim}>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <ArchBox
+            icon="🟢"
+            title="lab-runner"
+            sub="lab console (FastAPI), public"
+            detail="SA: lab-runner-sa"
+            badge="Fine-Grained Reader = sees real email"
+            badgeColor={COLORS.green}
+            color={COLORS.blue}
+          />
+          <ArchBox
+            icon="🔴"
+            title="ecommerce-agent"
+            sub="ADK + FastAPI, private"
+            detail="SA: ecommerce-analyst-agent"
+            badge="Masked Reader = sees XXXXX@example.com"
+            badgeColor={COLORS.coral}
+            color={COLORS.coral}
+          />
+        </div>
+      </LayerContainer>
+
+      <FlowArrow labels={["MCP tools (read-only)"]} />
+
+      <LayerContainer label="Remote MCP Servers · Google-hosted" color={COLORS.amber} dimColor={COLORS.amberDim} statusBadge="Preview">
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <ArchBox
+            icon="📊"
+            title="BigQuery MCP"
+            sub="bigquery.googleapis.com/mcp"
+            detail="list_dataset_ids, get_dataset_info, list_table_ids, get_table_info, execute_sql_readonly"
+            badge="execute_sql EXCLUDED"
+            badgeColor={COLORS.coral}
+            color={COLORS.amber}
+          />
+          <ArchBox
+            icon="📚"
+            title="Knowledge Catalog MCP"
+            sub="dataplex.googleapis.com/mcp"
+            detail="lookup_entry, lookup_context"
+            badge="search_entries EXCLUDED → scoped local tool"
+            badgeColor={COLORS.coral}
+            color={COLORS.amber}
+          />
+        </div>
+      </LayerContainer>
+
+      <FlowArrow labels={["queries", "reads catalog"]} />
+
+      <LayerContainer label="Data Platform · US multi-region" color={COLORS.green} dimColor={COLORS.greenDim}>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <ArchBox
+            icon="🗃"
+            title="BigQuery"
+            sub="ecommerce_lab"
+            detail="customers · orders · products"
+            badge2="ecommerce_graph_lab — BigQuery Property Graph"
+            badge2Status="GA"
+            color={COLORS.green}
+          />
+          <ArchBox
+            icon="📖"
+            title="Knowledge Catalog"
+            sub="glossary: ecommerce-business-terms"
+            detail="Revenue · High Value Customer · Order Status"
+            color={COLORS.green}
+          />
+          <ArchBox
+            icon="🔒"
+            title="Policy Tags"
+            sub="PII Classification"
+            detail="SENSITIVE → customers.email"
+            badge="FGR → real | Masked → XXXXX@ | Neither → ACCESS DENIED"
+            badgeColor={COLORS.coral}
+            color={COLORS.green}
+          />
+        </div>
+      </LayerContainer>
+
+      <div
+        style={{
+          marginTop: 24,
+          padding: "16px 20px",
+          background: `linear-gradient(135deg, ${COLORS.blueDim}44, ${COLORS.purpleDim}44)`,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 10,
+          borderLeft: `3px solid ${COLORS.blue}`,
+        }}
+      >
+        <p style={{ color: COLORS.textMuted, fontSize: 13, margin: 0, lineHeight: 1.6 }}>
+          <strong style={{ color: COLORS.blue }}>Principle 1 — Structural Enforcement:</strong>{" "}
+          The agent service (ecommerce-agent) can only call <code style={{ color: COLORS.amber }}>execute_sql_readonly</code>.
+          Write capability is physically absent from its tool set — not instructed away, but structurally impossible.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── DIAGRAM 2: Lab 10 ERD ─────────────────────────────────────
+function Lab10ERD() {
+  return (
+    <div style={{ padding: 32 }}>
+      <div style={{ marginBottom: 32 }}>
+        <h2 style={{ color: COLORS.text, fontSize: 22, fontWeight: 700, margin: 0 }}>
+          From Data to Agent — Entity Relationship Diagram
+        </h2>
+        <p style={{ color: COLORS.textMuted, fontSize: 14, margin: "8px 0 0" }}>
+          BigQuery ecommerce_lab + ecommerce_graph_lab + Knowledge Catalog + Policy Tags
+        </p>
+      </div>
+
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 32, justifyContent: "center" }}>
+        <ERDTable
+          name="customers"
+          color={COLORS.purple}
+          fields={[
+            { name: "customer_id", type: "STRING", pk: true },
+            { name: "name", type: "STRING" },
+            { name: "email", type: "STRING", tag: "SENSITIVE" },
+            { name: "segment", type: "STRING" },
+            { name: "lifetime_value", type: "FLOAT64" },
+            { name: "created_at", type: "TIMESTAMP" },
+          ]}
+        />
+        <ERDTable
+          name="products"
+          color={COLORS.teal}
+          fields={[
+            { name: "product_id", type: "STRING", pk: true },
+            { name: "name", type: "STRING" },
+            { name: "category", type: "STRING" },
+            { name: "price", type: "FLOAT64" },
+            { name: "description", type: "STRING" },
+          ]}
+        />
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "center", gap: 80, marginBottom: 8 }}>
+        <span style={{ color: COLORS.textDim, fontSize: 12 }}>1:N places ↓</span>
+        <span style={{ color: COLORS.textDim, fontSize: 12 }}>1:N ordered in ↓</span>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 32 }}>
+        <ERDTable
+          name="orders"
+          color={COLORS.blue}
+          fields={[
+            { name: "order_item_id", type: "STRING", pk: true, note: "unique" },
+            { name: "customer_id", type: "STRING", fk: "customers" },
+            { name: "product_id", type: "STRING", fk: "products" },
+            { name: "order_id", type: "STRING", note: "NOT unique" },
+            { name: "total_amount", type: "FLOAT64" },
+            { name: "status", type: "STRING" },
+            { name: "order_date", type: "DATE" },
+          ]}
+        />
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "8px 0 24px" }}>
+        <div style={{ flex: 1, height: 1, background: COLORS.border }} />
+        <span style={{ color: COLORS.textDim, fontSize: 11, letterSpacing: "0.08em", fontWeight: 600 }}>GOVERNED BY</span>
+        <div style={{ flex: 1, height: 1, background: COLORS.border }} />
+      </div>
+
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 220px", padding: 20, background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 10, borderTop: `3px solid ${COLORS.amber}` }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.amber, marginBottom: 8 }}>Glossary Terms · Knowledge Catalog</div>
+          <div style={{ fontFamily: "monospace", fontSize: 12, color: COLORS.textMuted, lineHeight: 1.8 }}>
+            <div>Revenue <span style={{ color: COLORS.textDim }}>— SUM WHERE Complete</span></div>
+            <div>High Value Customer <span style={{ color: COLORS.textDim }}>— top decile ≥ $52.12</span></div>
+            <div>Order Status <span style={{ color: COLORS.textDim }}>— 5 values, case-sensitive</span></div>
+          </div>
+        </div>
+        <div style={{ flex: "1 1 200px", padding: 20, background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 10, borderTop: `3px solid ${COLORS.coral}` }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.coral, marginBottom: 8 }}>Policy Tag · PII Classification</div>
+          <div style={{ fontFamily: "monospace", fontSize: 12, color: COLORS.textMuted, lineHeight: 1.8 }}>
+            <div>Taxonomy <span style={{ color: COLORS.textDim }}>PII Classification - &lt;project&gt;</span></div>
+            <div>Tag <span style={{ color: COLORS.textDim }}>SENSITIVE</span></div>
+            <div>Target <span style={{ color: COLORS.textDim }}>customers.email</span></div>
+            <div>Mask <span style={{ color: COLORS.textDim }}>EMAIL_MASK</span></div>
+          </div>
+        </div>
+        <div style={{ flex: "1 1 220px", padding: 20, background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 10, borderTop: `3px solid ${COLORS.green}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.green }}>BigQuery Property Graph</span>
+            <StatusBadge status="GA" />
+          </div>
+          <div style={{ fontFamily: "monospace", fontSize: 12, color: COLORS.textMuted, lineHeight: 1.8 }}>
+            <div><span style={{ color: COLORS.teal }}>NODE</span> Customer <span style={{ color: COLORS.textDim }}>KEY: customer_id</span></div>
+            <div><span style={{ color: COLORS.teal }}>NODE</span> Product <span style={{ color: COLORS.textDim }}>KEY: product_id</span></div>
+            <div><span style={{ color: COLORS.purple }}>EDGE</span> PURCHASED <span style={{ color: COLORS.textDim }}>KEY: order_item_id</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+</script>
+
+<script type="text/babel">
+/* @jsxRuntime classic */
+
+// ─── DIAGRAM 4: Lab 11 Data Flow ───────────────────────────────
+function Lab11DataFlow() {
+  return (
+    <div style={{ padding: 32 }}>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ color: COLORS.text, fontSize: 22, fontWeight: 700, margin: 0 }}>
+          Zero-ETL Federation — Data Flow
+        </h2>
+        <p style={{ color: COLORS.textMuted, fontSize: 14, margin: "8px 0 0" }}>
+          Two operational engines, read by BigQuery live on every query. Nothing is copied,
+          and there is no pipeline to be late.
+        </p>
+      </div>
+
+      {/* ── the two operational stores, where the applications write ── */}
+      <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+        <LiveEngine
+          color={COLORS.coral}
+          icon="🐘"
+          title="AlloyDB"
+          region="zeroetl-cluster · us-central1 · private IP"
+          holds="this quarter's order corrections"
+          writer="a fraud-scoring service reads and writes here"
+          details={["db: postgres · public schema", "customers · orders · products"]}
+        />
+        <LiveEngine
+          color={COLORS.green}
+          icon="🌐"
+          title="Spanner"
+          region="zeroetl-ops · ENTERPRISE · us-central1"
+          holds="live checkout transactions"
+          writer="checkout writes every order here as it happens"
+          details={["db: ecommerce-operational", "INTERLEAVE IN PARENT", "EcommerceOpsGraph"]}
+        />
+      </div>
+
+      {/* ── the read path: the actual subject of this lab ── */}
+      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginTop: 10 }}>
+        <ZeroEtlEdge
+          label="EXTERNAL_QUERY(connection, sql)"
+          detail="pushes SQL down into AlloyDB · alloydb_conn"
+          origin="'AlloyDB'"
+        />
+        <ZeroEtlEdge
+          label="external dataset"
+          detail="google-cloudspanner:/projects/… · spanner_conn_us"
+          origin="'Spanner'"
+        />
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "center", gap: 10, margin: "2px 0 6px", color: COLORS.teal, fontSize: 18 }}>
+        <span>↘</span>
+        <span style={{ color: COLORS.textDim, fontSize: 11, alignSelf: "center" }}>
+          zero-ETL · live read · no data movement
+        </span>
+        <span>↙</span>
+      </div>
+
+      <div style={{ textAlign: "center" }}>
+        <div style={{ display: "inline-block", minWidth: 460, padding: "18px 32px", background: `linear-gradient(135deg, ${COLORS.tealDim}44, ${COLORS.surface})`, border: `2px dashed ${COLORS.teal}`, borderRadius: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", marginBottom: 4 }}>
+            <span style={{ fontSize: 18 }}>📊</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: COLORS.teal, fontFamily: "monospace" }}>ecommerce_zeroetl.unified_orders</span>
+          </div>
+          <div style={{ fontSize: 12, color: COLORS.textMuted }}>a VIEW, not a table — it reads both engines every time you query it</div>
+          <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 4, fontFamily: "monospace" }}>origin: 'BigQuery' | 'AlloyDB' | 'Spanner'</div>
+        </div>
+      </div>
+
+      <div style={{ textAlign: "center", color: COLORS.textDim, fontSize: 14, margin: "6px 0" }}>↓</div>
+
+      <div style={{ textAlign: "center", marginBottom: 18 }}>
+        <div style={{ display: "inline-block", padding: "16px 30px", background: `linear-gradient(135deg, ${COLORS.amberDim}44, ${COLORS.greenDim}44)`, border: `1px solid ${COLORS.amber}44`, borderRadius: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", marginBottom: 6 }}>
+            <span style={{ fontSize: 16 }}>🔗</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: COLORS.amber }}>UnifiedEcommerceGraph</span>
+            <StatusBadge status="GA" />
+          </div>
+          <div style={{ fontSize: 12, color: COLORS.textMuted }}>BigQuery property graph over the unified views — traverses all three engines</div>
+        </div>
+      </div>
+
+      <div style={{ padding: "14px 18px", background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 10, borderLeft: `3px solid ${COLORS.amber}`, marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.amber, marginBottom: 6 }}>Governance (from From Data to Agent)</div>
+        <div style={{ fontSize: 12, color: COLORS.textMuted }}>Knowledge Catalog glossary terms · Policy Tags column masking · Enterprise Reservation — all apply to the unified view</div>
+      </div>
+
+      {/* An honest engineer should be able to find this. It is not the headline. */}
+      <div style={{ padding: "12px 16px", background: "transparent", border: `1px dashed ${COLORS.border}`, borderRadius: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textDim, letterSpacing: "0.06em", marginBottom: 4 }}>FOOTNOTE · HOW THE STORES GOT THEIR DATA</div>
+        <div style={{ fontSize: 11, color: COLORS.textDim, lineHeight: 1.6 }}>
+          AlloyDB and Spanner were provisioned with representative starter data as part of
+          environment setup — two <span style={{ fontFamily: "monospace" }}>EXPORT DATA</span> statements
+          in Terraform, run once before you arrived. That seeding is infrastructure, not part of this
+          demo, which is why those rows carry
+          <span style={{ fontFamily: "monospace" }}> written_by = 'reverse-etl-seed'</span>. What this
+          lab shows you is what happens AFTER data exists: zero-ETL reads, live, no pipeline.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// An engine the applications already write to. No inbound arrow: nothing in this
+// lab puts data here.
+function LiveEngine({ color, icon, title, region, holds, writer, details }) {
+  return (
+    <div style={{ flex: "1 1 320px", padding: 18, background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 12, borderTop: `3px solid ${color}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <span style={{ fontSize: 18 }}>{icon}</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color }}>{title}</span>
+        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", color: COLORS.bg, background: color, padding: "2px 6px", borderRadius: 3 }}>LIVE</span>
+      </div>
+      <div style={{ fontSize: 11, color: COLORS.textDim, marginBottom: 8, fontFamily: "monospace" }}>{region}</div>
+      <div style={{ fontSize: 12, color: COLORS.text, marginBottom: 2 }}>Already holds <strong>{holds}</strong>.</div>
+      <div style={{ fontSize: 11, color: COLORS.textMuted, marginBottom: 8 }}>{writer}</div>
+      {details.map((d, i) => (
+        <div key={i} style={{ fontSize: 12, color: COLORS.textMuted, lineHeight: 1.6, fontFamily: "monospace" }}>{d}</div>
+      ))}
+    </div>
+  );
+}
+
+// The read back into BigQuery. Dashed on purpose: nothing moves.
+function ZeroEtlEdge({ label, detail, origin }) {
+  return (
+    <div style={{ flex: "1 1 320px" }}>
+      <div style={{ textAlign: "center", color: COLORS.teal, fontSize: 16, lineHeight: 1 }}>↓</div>
+      <div style={{ textAlign: "center", padding: "10px 12px", border: `2px dashed ${COLORS.teal}`, borderRadius: 8, background: `${COLORS.tealDim}22` }}>
+        <div style={{ fontSize: 11, fontFamily: "monospace", color: COLORS.teal, fontWeight: 700 }}>{label}</div>
+        <div style={{ fontSize: 11, fontFamily: "monospace", color: COLORS.textMuted, wordBreak: "break-all" }}>{detail}</div>
+        <div style={{ marginTop: 4 }}>
+          <StatusBadge status="GA" />
+          <span style={{ fontSize: 10, color: COLORS.textDim, fontFamily: "monospace", marginLeft: 6 }}>origin {origin}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// A legend, because the two arrow styles carry the whole distinction.
+// One engine's complete round trip: solid out, box, dashed back.
+// A solid, labelled downward edge: data is genuinely copied here.
+// ─── DIAGRAM 5: Lab 11 Agent Topology ──────────────────────────
+function Lab11Topology() {
+  return (
+    <div style={{ padding: 32 }}>
+      <div style={{ marginBottom: 32 }}>
+        <h2 style={{ color: COLORS.text, fontSize: 22, fontWeight: 700, margin: 0 }}>
+          Zero-ETL Federation — Agent Topology (DispatchOrchestrator)
+        </h2>
+        <p style={{ color: COLORS.textMuted, fontSize: 14, margin: "8px 0 0" }}>
+          Router (tools=[], code-level dispatch) + 5 Specialists across 2 Cloud Run services
+        </p>
+      </div>
+
+      <div style={{ display: "flex", gap: 16, justifyContent: "center", marginBottom: 16, flexWrap: "wrap" }}>
+        <ArchBox icon="⌨" title="Terminal" sub="agy CLI" color={COLORS.purple} compact />
+        <ArchBox icon="🌐" title="Browser" sub="lab console" color={COLORS.purple} compact />
+      </div>
+
+      <div style={{ textAlign: "center", margin: "4px 0", color: COLORS.textDim, fontSize: 12 }}>↓ HTTPS / agy -i prompts</div>
+
+      <div style={{ textAlign: "center", marginBottom: 16 }}>
+        <div style={{ display: "inline-block", padding: "12px 24px", background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 10 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.blue }}>lab11-runner</span>
+          <span style={{ fontSize: 12, color: COLORS.textMuted, marginLeft: 8 }}>lab console (FastAPI), public · SA: lab11-runner-sa</span>
+          <StatusBadge status="Read-Only" />
+        </div>
+      </div>
+
+      <div style={{ textAlign: "center", margin: "4px 0", color: COLORS.textDim, fontSize: 12 }}>↓ POST /chat</div>
+
+      <div style={{ textAlign: "center", marginBottom: 20 }}>
+        <div style={{ display: "inline-block", padding: "16px 32px", background: `linear-gradient(135deg, #1A1A2E, #16213E)`, border: `1px solid ${COLORS.blue}`, borderRadius: 12, minWidth: 320 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: COLORS.text, marginBottom: 4 }}>ROUTER</div>
+          <div style={{ fontFamily: "monospace", fontSize: 12, color: COLORS.blue }}>tools=[] · sub_agents=[]</div>
+          <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4 }}>Code-level dispatch via _INTENT_TO_SPECIALIST map</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 300px", padding: 16, background: `${COLORS.blueDim}22`, border: `1px solid ${COLORS.blueDim}`, borderRadius: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.blue }}>lab11-agent</span>
+            <StatusBadge status="Read-Only" />
+            <span style={{ fontSize: 11, color: COLORS.textMuted }}>SA: lab11-dispatch-sa</span>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <SpecialistCard label="ANALYTICS" title="BQ Analyst" detail="BQ MCP · execute_sql_readonly" color={COLORS.blue} />
+            <SpecialistCard label="GRAPH_*" title="Graph Specialist" detail="BQ GRAPH_TABLE + Spanner GQL" color={COLORS.teal} />
+            <SpecialistCard label="CATALOG" title="Catalog Specialist" detail="Knowledge Catalog REST API · scoped search_entries" color={COLORS.amber} />
+          </div>
+        </div>
+
+        <div style={{ flex: "1 1 250px", padding: 16, background: `${COLORS.coralDim}22`, border: `1px solid ${COLORS.coralDim}`, borderRadius: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.coral }}>lab11-transact</span>
+            <StatusBadge status="Write-Capable" />
+            <span style={{ fontSize: 11, color: COLORS.textMuted }}>SA: lab11-transact-sa</span>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <SpecialistCard label="TRANSACT_ALLOYDB" title="AlloyDB Specialist" detail="alloydb MCP · execute_sql (R+W)" color={COLORS.coral} badge="HTTP + ID token" />
+            <SpecialistCard label="TRANSACT_SPANNER" title="Spanner Specialist" detail="spanner MCP · create_session → execute_sql → commit" color={COLORS.coral} badge="HTTP + ID token" />
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 16, padding: 16, background: `${COLORS.amberDim}18`, border: `1px dashed ${COLORS.amber}`, borderRadius: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <span style={{ fontFamily: "monospace", fontSize: 11, fontWeight: 700, color: COLORS.amber }}>CLARIFY_ENGINE</span>
+          <span style={{ fontSize: 11, color: COLORS.textMuted }}>7th intent · TERMINAL — no specialist, by design</span>
+        </div>
+        <div style={{ fontSize: 12, color: COLORS.textMuted, lineHeight: 1.6 }}>
+          A write that does not name an engine stops here and asks which one. It is handled
+          ABOVE the dict lookup and must never be added to <span style={{ fontFamily: "monospace", color: COLORS.blue }}>_INTENT_TO_SPECIALIST</span>:
+          the only correct answer is another question. A write sent to the wrong engine lands a real
+          row under the wrong <span style={{ fontFamily: "monospace", color: COLORS.blue }}>origin</span>, the totals still reconcile, and nothing reports a problem.
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 12, marginTop: 20, flexWrap: "wrap" }}>
+        <PrincipleTag num={1} text="Router has tools=[] — cannot call any tool itself" />
+        <PrincipleTag num={2} text="Dispatch is code (_INTENT_TO_SPECIALIST), not a second model call" />
+        <PrincipleTag num={5} text="One job, one tool per specialist agent" />
+      </div>
+    </div>
+  );
+}
+</script>
+
+<script type="text/babel">
+/* @jsxRuntime classic */
+
+// ─── DIAGRAM: Lab 11 Components Architecture ───────────────────
+function Lab11Architecture() {
+  return (
+    <div style={{ padding: 32 }}>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ color: COLORS.text, fontSize: 22, fontWeight: 700, margin: 0 }}>
+          Zero-ETL Federation — Architecture Building Blocks
+        </h2>
+        <p style={{ color: COLORS.textMuted, fontSize: 14, margin: "8px 0 0" }}>
+          Three Cloud Run services across two identities, four remote tool surfaces, three engines
+        </p>
+      </div>
+
+      <LayerContainer label="Participant" color={COLORS.purple} dimColor={COLORS.purpleDim}>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <ArchBox icon="⌨" title="Terminal" sub="agy CLI + bash" color={COLORS.purple} />
+          <ArchBox icon="🌐" title="Browser" sub="lab console" color={COLORS.purple} />
+        </div>
+      </LayerContainer>
+
+      <FlowArrow labels={["HTTPS", "agy -i prompts"]} />
+
+      <LayerContainer label="Cloud Run · us-central1 — TWO identities, on purpose" color={COLORS.blue} dimColor={COLORS.blueDim}>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <ArchBox
+            icon="🖥"
+            title="lab11-runner"
+            sub="lab console (FastAPI), public"
+            detail="SA: lab11-runner-sa"
+            badge="Read-Only"
+            color={COLORS.blue}
+          />
+          <ArchBox
+            icon="🧭"
+            title="lab11-agent"
+            sub="ADK + FastAPI, private"
+            detail="SA: lab11-dispatch-sa — router + 3 read specialists"
+            badge="No write role on any engine"
+            color={COLORS.blue}
+          />
+          <ArchBox
+            icon="✍"
+            title="lab11-transact"
+            sub="ADK + FastAPI, private"
+            detail="SA: lab11-transact-sa — 2 write specialists"
+            badge="Write-Capable"
+            badgeColor={COLORS.coral}
+            color={COLORS.coral}
+          />
+        </div>
+        <div style={{ marginTop: 12, fontSize: 12, color: COLORS.textMuted, lineHeight: 1.6 }}>
+          ADK runs sub-agents in-process, and a process has exactly one service account. Two
+          capabilities therefore mean two services: <span style={{ fontFamily: "monospace", color: COLORS.blue }}>lab11-agent</span> reaches
+          the write path only by an HTTP call carrying an ID token.
+        </div>
+      </LayerContainer>
+
+      <FlowArrow labels={["MCP tools", "REST v1"]} />
+
+      <LayerContainer label="Remote tool surfaces · Google-hosted" color={COLORS.amber} dimColor={COLORS.amberDim}>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <ArchBox
+            icon="📊"
+            title="BigQuery MCP"
+            sub="bigquery.googleapis.com/mcp"
+            detail="execute_sql_readonly (+4 read tools)"
+            badge="execute_sql EXCLUDED"
+            badgeColor={COLORS.coral}
+            color={COLORS.amber}
+          />
+          <ArchBox
+            icon="🐘"
+            title="AlloyDB MCP"
+            sub="alloydb.googleapis.com/mcp"
+            detail="execute_sql, execute_sql_read_only"
+            badge="IAM user auth"
+            color={COLORS.amber}
+          />
+          <ArchBox
+            icon="🔑"
+            title="Spanner MCP"
+            sub="spanner.googleapis.com/mcp"
+            detail="create_session → execute_sql → commit"
+            badge="DML is two-phase"
+            color={COLORS.amber}
+          />
+          <ArchBox
+            icon="📚"
+            title="Knowledge Catalog REST API"
+            sub="dataplex.googleapis.com/v1"
+            detail="scoped search_entries, lookup_entry"
+            badge="local tools, not MCP"
+            color={COLORS.amber}
+          />
+        </div>
+      </LayerContainer>
+
+      <FlowArrow labels={["queries", "writes"]} />
+
+      <LayerContainer label="Three engines · nobody synchronised them" color={COLORS.green} dimColor={COLORS.greenDim}>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <ArchBox
+            icon="🐘"
+            title="AlloyDB"
+            sub="zeroetl-cluster · us-central1"
+            detail="db: postgres · public schema · private IP"
+            color={COLORS.coral}
+          />
+          <ArchBox
+            icon="🔑"
+            title="Spanner"
+            sub="zeroetl-ops · ENTERPRISE"
+            detail="ecommerce-operational · EcommerceOpsGraph"
+            color={COLORS.teal}
+          />
+          <ArchBox
+            icon="🗄"
+            title="BigQuery"
+            sub="US multi-region"
+            detail="ecommerce_zeroetl.unified_orders · spanner_federated"
+            badge="UnifiedEcommerceGraph"
+            color={COLORS.green}
+          />
+        </div>
+      </LayerContainer>
+
+      <div style={{ marginTop: 20, padding: 16, background: `${COLORS.purpleDim}18`, border: `1px dashed ${COLORS.purple}`, borderRadius: 12 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: COLORS.purple, marginBottom: 6, letterSpacing: "0.06em" }}>BUILDS ON LAB 10</div>
+        <div style={{ fontSize: 12, color: COLORS.textMuted, lineHeight: 1.6 }}>
+          The governed BigQuery layer from From Data to Agent — <span style={{ fontFamily: "monospace", color: COLORS.blue }}>ecommerce_lab</span>,
+          the Knowledge Catalog glossary and the SENSITIVE policy tag — is unchanged and still enforced.
+          This lab federates over it and re-checks its guarantees at Step 12.
+          See the <strong>Recap: From Data to Agent</strong> tab for that layer in full.
+          <span style={{ color: COLORS.textDim }}> The operational stores were seeded from it at
+          environment setup; that is infrastructure, not part of the lab.</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── DIAGRAM: Lab 11 Data Model ────────────────────────────────
+function Lab11ERD() {
+  return (
+    <div style={{ padding: 32 }}>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ color: COLORS.text, fontSize: 22, fontWeight: 700, margin: 0 }}>
+          Zero-ETL Federation — Data Model
+        </h2>
+        <p style={{ color: COLORS.textMuted, fontSize: 14, margin: "8px 0 0" }}>
+          The operational copies, and the federation that reads them back
+        </p>
+      </div>
+
+      <div style={{ padding: 12, background: "transparent", border: `1px dashed ${COLORS.border}`, borderRadius: 10, marginBottom: 14 }}>
+        <div style={{ fontSize: 11, color: COLORS.textDim, lineHeight: 1.6 }}>
+          The two schemas below are the OPERATIONAL stores — what the applications write to.
+          From Data to Agent's <span style={{ fontFamily: "monospace" }}>ecommerce_lab</span> is a separate,
+          governed warehouse and is unchanged; its full ERD is on the Recap tab. (Both stores were
+          seeded from it at environment setup, which is infrastructure rather than part of this lab.)
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 24 }}>
+        <div style={{ flex: "1 1 340px" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.coral, marginBottom: 10 }}>
+            AlloyDB · postgres · public schema
+          </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <ERDTable name="customers" color={COLORS.coral} fields={[
+              { name: "customer_id", type: "TEXT", pk: true },
+              { name: "name", type: "TEXT" },
+              { name: "email", type: "TEXT", note: "NULL by design" },
+              { name: "segment", type: "TEXT" },
+              { name: "lifetime_value", type: "DOUBLE PRECISION" },
+            ]} />
+            <ERDTable name="orders" color={COLORS.coral} fields={[
+              { name: "order_item_id", type: "TEXT", pk: true },
+              { name: "customer_id", type: "TEXT", fk: "customers" },
+              { name: "order_id", type: "TEXT" },
+              { name: "product_id", type: "TEXT", fk: "products" },
+              { name: "total_amount", type: "DOUBLE PRECISION" },
+              { name: "status", type: "TEXT" },
+              { name: "order_date", type: "DATE" },
+              { name: "written_by", type: "TEXT", note: "DEFAULT 'agent-insert'" },
+            ]} />
+            <ERDTable name="products" color={COLORS.coral} fields={[
+              { name: "product_id", type: "TEXT", pk: true },
+              { name: "name", type: "TEXT" },
+              { name: "category", type: "TEXT" },
+              { name: "price", type: "DOUBLE PRECISION" },
+            ]} />
+          </div>
+        </div>
+
+        <div style={{ flex: "1 1 340px" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.teal, marginBottom: 10 }}>
+            Spanner · ecommerce-operational · GoogleSQL
+          </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <ERDTable name="Customers" color={COLORS.teal} fields={[
+              { name: "customer_id", type: "STRING(64)", pk: true },
+              { name: "name", type: "STRING(MAX)" },
+              { name: "email", type: "STRING(MAX)", note: "NULL by design" },
+              { name: "segment", type: "STRING(64)" },
+              { name: "lifetime_value", type: "FLOAT64" },
+            ]} />
+            <ERDTable name="CustomerOrders" color={COLORS.teal} fields={[
+              { name: "customer_id", type: "STRING(64)", pk: true, note: "leads the PK" },
+              { name: "order_item_id", type: "STRING(64)", pk: true },
+              { name: "order_id", type: "STRING(64)" },
+              { name: "product_id", type: "STRING(64)" },
+              { name: "total_amount", type: "FLOAT64" },
+              { name: "status", type: "STRING(32)" },
+              { name: "order_date", type: "DATE" },
+              { name: "written_by", type: "STRING(32)" },
+            ]} />
+            <ERDTable name="Products" color={COLORS.teal} fields={[
+              { name: "product_id", type: "STRING(64)", pk: true },
+              { name: "name", type: "STRING(MAX)" },
+              { name: "category", type: "STRING(128)" },
+              { name: "price", type: "FLOAT64" },
+            ]} />
+          </div>
+          <div style={{ marginTop: 10, fontSize: 11, color: COLORS.textMuted, fontFamily: "monospace", lineHeight: 1.7 }}>
+            CustomerOrders INTERLEAVE IN PARENT Customers ON DELETE CASCADE<br />
+            INDEX CustomerOrdersByProduct ON CustomerOrders(product_id)
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "8px 0 20px" }}>
+        <div style={{ flex: 1, height: 1, background: COLORS.border }} />
+        <span style={{ color: COLORS.textDim, fontSize: 11, letterSpacing: "0.08em", fontWeight: 600 }}>READ BACK INTO BIGQUERY — NO COPY</span>
+        <div style={{ flex: 1, height: 1, background: COLORS.border }} />
+      </div>
+
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 260px", padding: 18, background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 10, borderTop: `3px solid ${COLORS.coral}` }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.coral, marginBottom: 8 }}>AlloyDB → EXTERNAL_QUERY</div>
+          <div style={{ fontFamily: "monospace", fontSize: 11, color: COLORS.textMuted, lineHeight: 1.8 }}>
+            <div>connection <span style={{ color: COLORS.textDim }}>alloydb_conn</span></div>
+            <div>form <span style={{ color: COLORS.textDim }}>EXTERNAL_QUERY(conn, sql)</span></div>
+            <div>origin <span style={{ color: COLORS.textDim }}>'AlloyDB'</span></div>
+          </div>
+        </div>
+        <div style={{ flex: "1 1 260px", padding: 18, background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 10, borderTop: `3px solid ${COLORS.teal}` }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.teal, marginBottom: 8 }}>Spanner → external dataset</div>
+          <div style={{ fontFamily: "monospace", fontSize: 11, color: COLORS.textMuted, lineHeight: 1.8 }}>
+            <div>dataset <span style={{ color: COLORS.textDim }}>spanner_federated</span></div>
+            <div>connection <span style={{ color: COLORS.textDim }}>spanner_conn_us</span></div>
+            <div style={{ wordBreak: "break-all" }}>uri <span style={{ color: COLORS.textDim }}>google-cloudspanner:/projects/…</span></div>
+            <div>origin <span style={{ color: COLORS.textDim }}>'Spanner'</span></div>
+          </div>
+        </div>
+        <div style={{ flex: "1 1 300px", padding: 18, background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 10, borderTop: `3px solid ${COLORS.green}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.green }}>VIEW ecommerce_zeroetl.unified_orders</span>
+          </div>
+          <div style={{ fontFamily: "monospace", fontSize: 11, color: COLORS.textMuted, lineHeight: 1.8 }}>
+            <div>3 arms UNION ALL · matched by POSITION</div>
+            <div>9 columns, identical order in every arm</div>
+            <div>origin <span style={{ color: COLORS.textDim }}>'BigQuery' | 'AlloyDB' | 'Spanner'</span></div>
+          </div>
+        </div>
+      </div>
+
+      <Annotation
+        text="Nothing here is a copy kept in sync. Every read is live federation, which is why a row an application writes to AlloyDB or Spanner appears in unified_orders with no pipeline running and nothing to wait for."
+        color={COLORS.green}
+        icon="✓"
+      />
+    </div>
+  );
+}
+
+// ─── Recap wrapper: Lab 10 foundation, shown as prior work ─────
+function Lab10Recap() {
+  return (
+    <div>
+      <div style={{ margin: "24px 32px 0", padding: 16, background: `${COLORS.amberDim}18`, border: `1px solid ${COLORS.amber}`, borderRadius: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.1em", color: COLORS.bg, background: COLORS.amber, padding: "3px 8px", borderRadius: 4 }}>RECAP</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.text }}>From Data to Agent foundation — what you already built</span>
+        </div>
+        <div style={{ fontSize: 12, color: COLORS.textMuted, lineHeight: 1.6 }}>
+          These two diagrams come from the From Data to Agent lab, reproduced unchanged. Nothing on this tab is new work for
+          today. They are here because this lab is built on top of this layer and Step 12 re-checks that
+          its guarantees still hold once three engines are in play.
+        </div>
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${COLORS.border}`, fontSize: 12, color: COLORS.textMuted }}>
+          Still live in your project: the governed <span style={{ fontFamily: "monospace", color: COLORS.amber }}>Revenue</span> definition
+          resolves to <span style={{ fontWeight: 700, color: COLORS.text }}>{GOVERNED_REVENUE}</span> against
+          <span style={{ fontFamily: "monospace" }}> ecommerce_lab</span> — the same number the From Data to Agent lab taught the agent to derive.
+        </div>
+      </div>
+      <Lab10Architecture />
+      <div style={{ margin: "0 32px", height: 1, background: COLORS.border }} />
+      <Lab10ERD />
+    </div>
+  );
+}
+</script>
+
+<script type="text/babel">
+/* @jsxRuntime classic */
+
+// ─── Shared Components ─────────────────────────────────────────
+
+function LayerContainer({ label, color, dimColor, children, statusBadge }) {
+  return (
+    <div style={{ padding: 20, background: `${dimColor}22`, border: `1px solid ${dimColor}`, borderRadius: 12, marginBottom: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+        <div style={{ width: 3, height: 18, background: color, borderRadius: 2 }} />
+        <span style={{ fontSize: 13, fontWeight: 700, color, letterSpacing: "0.01em" }}>{label}</span>
+        {statusBadge && <StatusBadge status={statusBadge} />}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ArchBox({ icon, title, sub, detail, badge, badgeColor, color, badge2, badge2Status, compact }) {
+  return (
+    <div style={{
+      flex: compact ? "0 1 auto" : "1 1 200px",
+      padding: compact ? "10px 16px" : "14px 18px",
+      background: COLORS.surface,
+      border: `1px solid ${COLORS.border}`,
+      borderRadius: 10,
+      borderLeft: `3px solid ${color}`,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: compact ? 0 : 6 }}>
+        <span style={{ fontSize: 16 }}>{icon}</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.text }}>{title}</span>
+      </div>
+      {sub && <div style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 2 }}>{sub}</div>}
+      {detail && <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 4, fontFamily: "monospace" }}>{detail}</div>}
+      {badge && (
+        <div style={{ fontSize: 10, color: badgeColor || COLORS.textMuted, marginTop: 6, padding: "3px 6px", background: `${(badgeColor || COLORS.textMuted)}18`, borderRadius: 4, display: "inline-block" }}>
+          {badge}
+        </div>
+      )}
+      {badge2 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+          <span style={{ fontSize: 11, color: COLORS.textMuted }}>{badge2}</span>
+          {badge2Status && <StatusBadge status={badge2Status} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FlowArrow({ labels }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, padding: "8px 0" }}>
+      <div style={{ width: 1, height: 20, background: COLORS.border }} />
+      {labels.map((l, i) => (
+        <span key={i} style={{ fontSize: 11, color: COLORS.textDim }}>{i > 0 ? " · " : ""}{l}</span>
+      ))}
+      <div style={{ width: 1, height: 20, background: COLORS.border }} />
+    </div>
+  );
+}
+
+function ERDTable({ name, color, fields }) {
+  return (
+    <div style={{ minWidth: 260, maxWidth: 340, flex: "1 1 260px", borderRadius: 10, overflow: "hidden", border: `1px solid ${COLORS.border}` }}>
+      <div style={{ padding: "10px 16px", background: color, textAlign: "center" }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{name}</span>
+      </div>
+      <div style={{ padding: "8px 0", background: COLORS.surface }}>
+        {fields.map((f, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", padding: "4px 14px", gap: 6, fontFamily: "monospace", fontSize: 12 }}>
+            {f.pk && <span style={{ color: COLORS.amber, fontSize: 10, fontWeight: 700 }}>PK</span>}
+            {f.fk && <span style={{ color: COLORS.teal, fontSize: 10, fontWeight: 700 }}>FK</span>}
+            {!f.pk && !f.fk && <span style={{ width: 16 }} />}
+            <span style={{ color: COLORS.text, flex: 1 }}>{f.name}</span>
+            <span style={{ color: COLORS.textDim, fontSize: 11 }}>{f.type}</span>
+            {f.tag && <span style={{ fontSize: 9, fontWeight: 700, color: COLORS.coral, background: COLORS.coralDim, padding: "1px 5px", borderRadius: 3 }}>{f.tag}</span>}
+            {f.note && <span style={{ fontSize: 10, color: COLORS.textDim }}>({f.note})</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Annotation({ text, color, icon }) {
+  return (
+    <div style={{ margin: "8px 16px", padding: "10px 14px", background: `${color}12`, border: `1px solid ${color}44`, borderRadius: 8, display: "flex", gap: 8, alignItems: "flex-start" }}>
+      {icon && <span style={{ fontSize: 14 }}>{icon}</span>}
+      <span style={{ fontSize: 11, color, lineHeight: 1.5 }}>{text}</span>
+    </div>
+  );
+}
+
+function SpecialistCard({ label, title, detail, color, badge }) {
+  return (
+    <div style={{ flex: "1 1 140px", padding: "10px 14px", background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, borderLeft: `3px solid ${color}` }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: "0.04em", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.text }}>{title}</div>
+      <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2, fontFamily: "monospace" }}>{detail}</div>
+      {badge && <div style={{ fontSize: 10, color: COLORS.textDim, marginTop: 4, fontStyle: "italic" }}>{badge}</div>}
+    </div>
+  );
+}
+
+function PrincipleTag({ num, text }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", background: `${COLORS.blueDim}44`, border: `1px solid ${COLORS.blueDim}`, borderRadius: 6, flex: "1 1 200px" }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.blue, minWidth: 16 }}>P{num}</span>
+      <span style={{ fontSize: 11, color: COLORS.textMuted }}>{text}</span>
+    </div>
+  );
+}
+
+// ─── Main App ──────────────────────────────────────────────────
+
+const TABS = [
+  { id: "arch", label: "Architecture", icon: "🏗", component: Lab11Architecture },
+  { id: "erd", label: "Data Model", icon: "🗃", component: Lab11ERD },
+  { id: "flow", label: "Data Flow", icon: "🔄", component: Lab11DataFlow },
+  { id: "topo", label: "Agent Topology", icon: "🤖", component: Lab11Topology },
+  { id: "recap", label: "Recap: From Data to Agent", icon: "📎", component: Lab10Recap, recap: true },
+];
+
+function App() {
+  const [activeTab, setActiveTab] = useState("arch");
+  const ActiveComponent = TABS.find((t) => t.id === activeTab)?.component || Lab11Architecture;
+
+  return (
+    <div style={{ minHeight: "100vh", background: COLORS.bg, color: COLORS.text, fontFamily: "'Inter', -apple-system, system-ui, sans-serif" }}>
+      <div style={{ padding: "24px 32px 0", borderBottom: `1px solid ${COLORS.border}` }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 4 }}>
+          <h1 style={{ fontSize: 18, fontWeight: 800, color: COLORS.text, margin: 0, letterSpacing: "-0.02em" }}>
+            Agentic Data Cloud
+          </h1>
+          <span style={{ fontSize: 12, color: COLORS.textDim, fontWeight: 500 }}>Zero-ETL Federation Reference Diagrams</span>
+        </div>
+        <div style={{ display: "flex", gap: 6, paddingTop: 12, overflowX: "auto", paddingBottom: 0 }}>
+          {TABS.map((t) => (
+            <TabButton key={t.id} active={activeTab === t.id} onClick={() => setActiveTab(t.id)} icon={t.icon} recap={t.recap}>
+              {t.label}
+            </TabButton>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1100, margin: "0 auto", paddingBottom: 40 }}>
+        <ActiveComponent />
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% from "macros.html" import action, card, terminal %}
+{% block content %}
+{% call card("Naive vs governed revenue") %}
+{{ action("s12-numbers", "Show the two numbers") }}
+{% endcall %}
+{% call card("Ask the agent") %}
+{{ action("s12-ask", "Ask for revenue by origin", primary=false, note="expect search_entries before execute_sql_readonly") }}
+{% endcall %}
+{% call card("Take Revenue away, then give it back") %}
+{{ terminal("delete the Revenue term with agy, then press Ask for revenue by origin again", "Step 12 · 3–4") }}
+{{ terminal("restore the Revenue term with agy", "Step 12 · 5") }}
+{% endcall %}
+{% endblock %}

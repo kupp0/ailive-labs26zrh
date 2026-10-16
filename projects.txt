@@ -1,0 +1,19 @@
+# ==============================================================================
+# Event Participant Project Mapping
+# Format: PROJECT_ID, IAP_MEMBER, REGION, ROLE
+#
+# ⚠️ ATTENTION: This event includes labs that need a dedicated Admin Project.
+# Exactly ONE project MUST be designated 'role=admin'. It hosts event-wide
+# infrastructure contributed by the selected labs and is provisioned before,
+# and destroyed after, every participant project.
+#
+# 🚨 CRITICAL SECURITY & OPERATIONAL NOTICE:
+# - NEVER distribute the Admin Project (role=admin) credentials to participants!
+# - Minimum 2 projects: exactly 1 role=admin and at least 1 role=participant.
+# - Trailing fields are order-independent key=value tokens (role=..., city=...).
+#
+# Examples:
+#   my-admin-project, admin@gcplab.me, us-central1, role=admin
+#   my-participant-project-01, user:participant01@gcplab.me, us-central1, role=participant
+#   my-participant-project-02, user:participant02@gcplab.me, us-central1, role=participant
+# ==============================================================================

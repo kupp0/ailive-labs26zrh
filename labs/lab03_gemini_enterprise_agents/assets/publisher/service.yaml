@@ -1,0 +1,50 @@
+# ==============================================================================
+# Lab 12 — publisher console Cloud Run service
+#
+# Runs as ge-publisher-sa (Terraform, infra/main.tf). That identity, not the
+# participant, starts the Gemini Enterprise trial, creates the app, grants the
+# Discovery Engine service agent run.invoker on the two agent services, and
+# registers them. deploy.sh fills the ${VAR} placeholders.
+# ==============================================================================
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ${PUBLISHER_SERVICE}
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: "2"
+    spec:
+      serviceAccountName: ${PUBLISHER_SA}
+      # One publish creates a licence, an app and two registrations, each a
+      # long-running operation; the slowest observed run is well under this.
+      timeoutSeconds: 600
+      containers:
+        - name: publisher
+          image: ${PUBLISHER_IMAGE}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GOOGLE_CLOUD_PROJECT
+              value: "${PROJECT_ID}"
+            - name: PROJECT_NUMBER
+              value: "${PROJECT_NUMBER}"
+            - name: REGION
+              value: "${REGION}"
+            - name: PUBLISHER_SA
+              value: "${PUBLISHER_SA}"
+            - name: PARTICIPANT_EMAIL
+              value: "${PARTICIPANT_EMAIL}"
+            - name: LAB10_AGENT_SERVICE
+              value: "${LAB10_AGENT_SERVICE}"
+            - name: LAB11_AGENT_SERVICE
+              value: "${LAB11_AGENT_SERVICE}"
+            - name: LAB10_CONSOLE_URL
+              value: "${LAB10_CONSOLE_URL}"
+            - name: LAB11_CONSOLE_URL
+              value: "${LAB11_CONSOLE_URL}"
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi

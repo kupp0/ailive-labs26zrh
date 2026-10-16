@@ -1,0 +1,104 @@
+{
+  "event_name": "AI Live and Labs Zurich 2026",
+  "selected_labs": [
+    {
+      "id": "bigquery_agentic_data_cloud",
+      "name": "From Data to Agent (BigQuery & Knowledge Catalog)",
+      "assets_src": "labs/lab01_bigquery_agentic_data_cloud",
+      "dest_dir": "labs/lab01_bigquery_agentic_data_cloud",
+      "skills": [
+        {
+          "name": "bigquery-graph",
+          "src": "labs/lab01_bigquery_agentic_data_cloud/.agents/skills/bigquery-graph/SKILL.md"
+        },
+        {
+          "name": "knowledge-catalog",
+          "src": "labs/lab01_bigquery_agentic_data_cloud/.agents/skills/knowledge-catalog/SKILL.md"
+        }
+      ],
+      "has_infra": true
+    },
+    {
+      "id": "agentic_data_cloud_zero_etl",
+      "name": "Agentic Data Cloud: Zero-ETL Federation (AlloyDB, Spanner & BigQuery)",
+      "assets_src": "labs/lab02_agentic_data_cloud_zero_etl",
+      "dest_dir": "labs/lab02_agentic_data_cloud_zero_etl",
+      "skills": [
+        {
+          "name": "zero-etl-federation",
+          "src": "labs/lab02_agentic_data_cloud_zero_etl/.agents/skills/zero-etl-federation/SKILL.md"
+        },
+        {
+          "name": "alloydb-transactional",
+          "src": "labs/lab02_agentic_data_cloud_zero_etl/.agents/skills/alloydb-transactional/SKILL.md"
+        },
+        {
+          "name": "spanner-graph-operational",
+          "src": "labs/lab02_agentic_data_cloud_zero_etl/.agents/skills/spanner-graph-operational/SKILL.md"
+        },
+        {
+          "name": "multi-agent-routing",
+          "src": "labs/lab02_agentic_data_cloud_zero_etl/.agents/skills/multi-agent-routing/SKILL.md"
+        }
+      ],
+      "has_infra": true
+    },
+    {
+      "id": "gemini_enterprise_agents",
+      "name": "Publish ADK Agents to Gemini Enterprise (Labs 10 & 11)",
+      "assets_src": "labs/lab03_gemini_enterprise_agents",
+      "dest_dir": "labs/lab03_gemini_enterprise_agents",
+      "skills": [],
+      "has_infra": true
+    }
+  ],
+  "mcp_servers": [
+    {
+      "id": "bigquery",
+      "type": "plugin",
+      "config": {
+        "url": "https://bigquery.googleapis.com/mcp",
+        "serverUrl": "https://bigquery.googleapis.com/mcp",
+        "serverURL": "https://bigquery.googleapis.com/mcp",
+        "authProviderType": "google_credentials"
+      }
+    },
+    {
+      "id": "knowledge-catalog",
+      "type": "plugin",
+      "config": {
+        "url": "https://dataplex.googleapis.com/mcp",
+        "serverUrl": "https://dataplex.googleapis.com/mcp",
+        "serverURL": "https://dataplex.googleapis.com/mcp",
+        "authProviderType": "google_credentials"
+      }
+    },
+    {
+      "id": "spanner",
+      "type": "plugin",
+      "config": {
+        "url": "https://spanner.googleapis.com/mcp",
+        "serverUrl": "https://spanner.googleapis.com/mcp",
+        "serverURL": "https://spanner.googleapis.com/mcp",
+        "authProviderType": "google_credentials"
+      }
+    },
+    {
+      "id": "alloydb",
+      "type": "plugin",
+      "config": {
+        "url": "https://alloydb.googleapis.com/mcp",
+        "serverUrl": "https://alloydb.googleapis.com/mcp",
+        "serverURL": "https://alloydb.googleapis.com/mcp",
+        "authProviderType": "google_credentials"
+      }
+    }
+  ],
+  "requires_admin_project": true,
+  "quota_overrides": [],
+  "admin_labs": [
+    "bigquery_agentic_data_cloud"
+  ],
+  "admin_post_deploy": [],
+  "admin_pre_destroy": []
+}

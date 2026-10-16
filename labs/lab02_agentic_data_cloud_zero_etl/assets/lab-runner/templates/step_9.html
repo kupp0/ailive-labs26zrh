@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% from "macros.html" import action, card %}
+{% block content %}
+{% call card("Timed proof: count, write, count") %}
+{{ action("s9-proof", "Run the timed proof", note="the agent writes one row to Spanner") }}
+{% endcall %}
+{% call card("Where those seconds actually go") %}
+{{ action("s9-breakdown", "Measure the breakdown", note="16 queries · about a minute") }}
+{% endcall %}
+{% endblock %}

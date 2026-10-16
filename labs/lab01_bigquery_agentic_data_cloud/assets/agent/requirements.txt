@@ -1,0 +1,28 @@
+# ==============================================================================
+# Lab 10 — agent service dependencies
+# ==============================================================================
+# The agent reaches BigQuery and the Knowledge Catalog through remote MCP
+# servers (both Preview), so it needs ADK's MCP extra rather than the BigQuery
+# and Dataplex client libraries.
+#
+# The `mcp` pin is not cosmetic: google-adk requires mcp>=1.24,<2, and an
+# environment carrying mcp 2.x fails at import with
+#   "cannot import name 'McpHttpClientFactory' from 'mcp.client.streamable_http'"
+google-adk[mcp]>=2.5.0
+mcp>=1.24,<2
+
+# ADC bearer tokens for the two MCP endpoints.
+# AuthorizedSession, used by the scoped search_entries tool. google-auth
+# imports it lazily, so an absent `requests` fails at call time, not import.
+google-auth>=2.30.0
+requests>=2.32
+
+# HTTP surface (main.py).
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+
+# A2A surface for Gemini Enterprise (a2a_surface.py, Lab 12). a2a-sdk 1.x
+# serves the v0.3 wire format GE speaks through enable_v0_3_compat; ADK's
+# A2aAgentExecutor is the bridge. Absent or broken, /chat keeps working.
+a2a-sdk[http-server]>=1.2,<2

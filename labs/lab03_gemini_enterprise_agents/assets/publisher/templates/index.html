@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Publish ADK Agents to Gemini Enterprise · Data Forge</title>
+  <link rel="stylesheet" href="/static/publisher.css">
+  <script src="/static/publisher.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="dot dot-blue"></span><span class="dot dot-red"></span><span class="dot dot-yellow"></span><span class="dot dot-green"></span>
+      <span class="brand-text">Data Forge · Gemini Enterprise</span>
+    </div>
+    <nav class="labtabs" aria-label="Labs">
+      {% for lab in labs %}
+      {% if lab.current %}
+      <span class="labtab active" aria-current="page"><span class="labtab-num">{{ lab.title }}</span></span>
+      {% elif lab.url %}
+      <a class="labtab" href="{{ lab.url }}/"><span class="labtab-num">{{ lab.title }}</span><span class="labtab-go">↗</span></a>
+      {% else %}
+      <span class="labtab off" title="{{ lab.hint }}"><span class="labtab-num">{{ lab.title }}</span><span class="labtab-title">not deployed yet</span></span>
+      {% endif %}
+      {% endfor %}
+    </nav>
+    <div class="meta">
+      <span>project <code>{{ project }}</code></span>
+      <span>region <code>{{ region }}</code></span>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>Publish ADK Agents to Gemini Enterprise</h1>
+      <p class="lede">
+        One click puts the agents you built in the From Data to Agent and Zero-ETL Federation labs in front of business users.
+        This console starts the Gemini Enterprise trial, creates the
+        <strong>{{ engine_display_name }}</strong> app, grants Gemini Enterprise permission to call
+        <em>only</em> those two agent services, registers them over A2A, and hands you the link.
+      </p>
+    </section>
+
+    <section class="card" aria-labelledby="agents-h">
+      <h2 id="agents-h">1 · Your agents</h2>
+      <ul class="agents" id="agents">
+        {% for a in agents %}
+        <li data-service="{{ a.service }}">
+          <span class="badge" data-role="state">checking…</span>
+          <span class="agent-lab">{{ a.lab }}</span>
+          <code>{{ a.service }}</code>
+        </li>
+        {% endfor %}
+      </ul>
+      <p class="hint">The Zero-ETL dispatch agent is optional. If it is not deployed, only the governed analyst is published.</p>
+    </section>
+
+    <section class="card" aria-labelledby="publish-h">
+      <h2 id="publish-h">2 · Publish</h2>
+      <form id="publish-form" novalidate>
+        <label for="users">Business users who should get a Gemini Enterprise seat <span class="opt">(optional)</span></label>
+        <textarea id="users" name="users" rows="2" placeholder="analyst01@your-domain.com, analyst02@your-domain.com"></textarea>
+        <p class="hint">
+          {% if participant %}You (<code>{{ participant }}</code>) always get a seat.{% endif %}
+          Users must belong to this project's organisation domain.
+        </p>
+        <button type="submit" id="publish-btn" class="primary">
+          <span class="btn-label">Publish ADK Agents to Gemini Enterprise</span>
+          <span class="spinner" aria-hidden="true"></span>
+        </button>
+      </form>
+      <ol class="steps" id="steps" aria-live="polite" aria-busy="false"></ol>
+      <p class="error" id="form-error" role="alert" hidden></p>
+    </section>
+
+    <section class="card result" id="result" hidden aria-labelledby="result-h">
+      <h2 id="result-h">3 · Hand this link to business users</h2>
+      <div class="link-row">
+        <a id="web-app-link" href="#" target="_blank" rel="noopener"></a>
+        <button type="button" id="copy-btn" class="secondary">Copy link</button>
+      </div>
+      <p class="hint" id="licensed"></p>
+      <p class="hint">
+        Open it in a browser signed in as a licensed user. Ask, for example,
+        <q>What is our revenue?</q> — Gemini Enterprise routes the question to the right agent,
+        and each answer ends with a <strong>Grounding</strong> footer naming the tools and SQL that actually ran.
+        A newly registered agent can take a minute or two to appear.
+      </p>
+    </section>
+
+    <section class="card" aria-labelledby="try-h">
+      <h2 id="try-h">4 · Try an agent over A2A <span class="opt">(what Gemini Enterprise sends)</span></h2>
+      <div class="try">
+        {% for a in agents %}
+        <div class="try-col">
+          <h3>{{ a.lab }} · <code>{{ a.service }}</code></h3>
+          {% for q in questions[a.service] %}
+          <button type="button" class="secondary try-btn" data-service="{{ a.service }}" data-question="{{ q }}">{{ q }}</button>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+      <div id="answer" class="answer" aria-live="polite" hidden></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    Gemini Enterprise A2A registration is a Preview feature. The trial edition is free for 30 days.
+  </footer>
+</body>
+</html>

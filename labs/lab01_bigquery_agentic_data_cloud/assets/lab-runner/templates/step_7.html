@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "macros.html" import action, card, terminal %}
+{% block content %}
+{% call card("1 · The two numbers") %}
+{{ action("s7-numbers", "Compute revenue two ways") }}
+{% endcall %}
+{% call card("2 · What the catalog says") %}
+{{ action("s7-terms", "Show the terms as this console sees them", primary=false) }}
+{% endcall %}
+
+{% call card("3 · Take Revenue away, then give it back", "Demonstration 1") %}
+<div class="steps">
+  <div class="substep"><span class="sub-tag">a</span>{{ action("s7-rev-before", "Ask: What is our revenue?", note="term exists") }}</div>
+  {{ terminal("delete the Revenue term with agy", "Step 7 · 3b") }}
+  <div class="substep"><span class="sub-tag">c</span>{{ action("s7-rev-gone", "Ask the agent again", note="term deleted") }}</div>
+  {{ terminal("restore the Revenue term with agy", "Step 7 · 3d") }}
+  <div class="substep"><span class="sub-tag">e</span>{{ action("s7-rev-back", "Ask the agent a third time", note="term restored") }}</div>
+</div>
+{% endcall %}
+
+{% call card("4 · Add a term the agent needs", "Demonstration 2") %}
+<div class="steps">
+  <div class="substep"><span class="sub-tag">a</span>{{ action("s7-cancel-before", "Ask: How many orders were cancelled?", note="no Order Status term yet") }}</div>
+  <div class="substep"><span class="sub-tag">·</span>{{ action("s7-guess", "Show what a guess would have cost", primary=false, note="both casings, one query") }}</div>
+  {{ terminal("create the Order Status term with agy", "Step 7 · 4b") }}
+  <div class="substep"><span class="sub-tag">c</span>{{ action("s7-cancel-after", "Ask the agent again", note="term created") }}</div>
+</div>
+{% endcall %}
+{% endblock %}

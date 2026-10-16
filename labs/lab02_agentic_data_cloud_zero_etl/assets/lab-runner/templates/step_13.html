@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "macros.html" import action, card %}
+{% block content %}
+{% call card("Read customers.email as this console") %}
+{{ action("s13-read", "Read the column as this console") }}
+{% endcall %}
+{% call card("Ask the agent to read the same column") %}
+{{ action("s13-ask", "Ask the agent", primary=false) }}
+{% endcall %}
+{% call card("Try to argue with it") %}
+{{ action("s13-argue", "Try it", primary=false) }}
+{% endcall %}
+{% endblock %}

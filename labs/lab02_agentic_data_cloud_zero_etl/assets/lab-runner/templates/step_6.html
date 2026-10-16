@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "macros.html" import action, card %}
+{% block content %}
+{% call card("Three services, three identities") %}
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Service</th><th>Runs as</th><th>Capability</th></tr></thead>
+    <tbody>
+      {% for label, sa, cap in identities %}
+      <tr><td>{{ label }}</td><td class="mono">{{ sa }}</td><td>{{ cap }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="kv"><span>dispatch</span><code>{{ agent_url or 'not deployed' }}</code></div>
+<div class="kv"><span>transact</span><code>{{ transact_url or 'not deployed' }}</code></div>
+{% endcall %}
+{% call card("Service health") %}
+{{ action("s6-health", "Check both services are healthy") }}
+{% endcall %}
+{% endblock %}

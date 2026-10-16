@@ -1,0 +1,638 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Agentic Data Cloud — From Data to Agent Reference Diagrams</title>
+<!--
+  ONE FILE PER LAB, AND THEY ARE NOT THE SAME FILE.
+    labs/10_bigquery_agentic_data_cloud/src/lab-runner/diagrams.html  — 3 tabs, Lab 10 only
+    labs/11_agentic_data_cloud_zero_etl/src/lab-runner/diagrams.html  — 4 Lab 11 tabs + 1 recap
+
+  This is the LAB 10 copy. The two files were once byte-identical and showed all
+  five diagrams in both runners, which meant a Lab 10 participant met AlloyDB,
+  Spanner and a five-specialist router before building any of it. They are now
+  scoped per lab.
+
+  WHAT MUST STAY IN SYNC
+  ----------------------
+  Lab 11 reproduces Lab10Architecture and Lab10ERD verbatim for its "Recap: Lab 10
+  Foundation" tab. Those two functions must remain character-for-character identical
+  to Lab 10's copies -- diff them if you touch either:
+    diff <(sed -n '/^function Lab10Architecture/,/^}/p' labs/10_*/src/lab-runner/diagrams.html) \
+         <(sed -n '/^function Lab10Architecture/,/^}/p' labs/11_*/src/lab-runner/diagrams.html)
+  Everything else is deliberately per-lab and must NOT be copied across.
+
+  WHY A FILE PER LAB RATHER THAN ONE SHARED FILE
+  ----------------------------------------------
+  Each runner's Docker build context is its own lab-runner/ directory, so a shared
+  file outside it cannot be COPYed in without changing both Dockerfiles and both
+  deploy scripts. That constraint is real and is why the recap is duplicated rather
+  than imported.
+
+  WHY THIS IS ONE FILE WITH NO BUILD STEP
+  ---------------------------------------
+  The obvious shape is `npm create vite@latest`. Two constraints rule it out,
+  both already documented in this repo:
+
+    Terraform cannot install anything on a participant workstation. It runs on
+    the DEPLOYMENT host, and the scaffolding engine seals assets.zip BEFORE
+    `terraform apply` -- see labs/10.../infra/main.tf section 15, which removed a
+    local_file resource for exactly this reason.
+
+    npm is not reliably reachable. Corp environments run an Airlock that blocks
+    npx and package installs; demo2's alloydb_specialist.py keeps a hosted-HTTP
+    fallback because of it.
+
+  So React and Babel come from a pinned CDN and the app is one file. It embeds
+  is served by the lab console at /reference and also opens standalone with
+  `python3 -m http.server`.
+
+  TWO ADAPTATIONS FROM THE ORIGINAL SOURCE
+    `import { useState } from "react"` -> `const { useState } = React`
+    `export default function App()`    -> `function App()` + an explicit render
+  There is no bundler here, so ESM syntax would not resolve.
+-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.2/babel.min.js"></script>
+<style>
+  /* body carries the dark background explicitly so no light gutter shows,
+     whether served by the console or opened standalone. */
+  html, body { margin: 0; padding: 0; background: #0F1117; }
+  #root { min-height: 100vh; }
+  * { box-sizing: border-box; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: #0F1117; }
+  ::-webkit-scrollbar-thumb { background: #2A2E3B; border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3D4255; }
+</style>
+<div id="root"></div>
+
+<script type="text/babel">
+/* @jsxRuntime classic */
+/* `import`/`export` removed: React and ReactDOM are CDN globals here. */
+const { useState } = React;
+
+// The governed revenue figure for THIS participant's project. The lab runner
+// substitutes the token below with the result of
+//   SELECT SUM(total_amount) FROM <dataset>.orders WHERE status = 'Complete'
+// before serving the page, so the sequence diagram shows the number the
+// participant will actually see. A hardcoded figure is wrong twice over: the
+// seeded sample differs per project, and a number that does not match what they
+// just measured undermines the point the diagram is making.
+// Opened standalone (python3 -m http.server) the token is left in place and the
+// neutral wording below is used instead.
+const _REV = "__GOVERNED_REVENUE__";
+const GOVERNED_REVENUE = _REV.indexOf("__") === 0 ? "your project's governed revenue" : _REV;
+
+const COLORS = {
+  bg: "#0F1117",
+  surface: "#181B24",
+  surfaceHover: "#1E2230",
+  border: "#2A2E3B",
+  borderAccent: "#3D4255",
+  text: "#E8E9ED",
+  textMuted: "#8B8FA3",
+  textDim: "#5C6078",
+  blue: "#4285F4",
+  blueDim: "#1A3A6E",
+  green: "#34A853",
+  greenDim: "#1B4D2E",
+  coral: "#EA4335",
+  coralDim: "#5C1A14",
+  amber: "#FBBC04",
+  amberDim: "#5C4502",
+  purple: "#A142F4",
+  purpleDim: "#3A1A5C",
+  teal: "#24C1E0",
+  tealDim: "#0E4D5C",
+};
+
+const TabButton = ({ active, onClick, children, icon }) => (
+  <button
+    onClick={onClick}
+    style={{
+      padding: "10px 16px",
+      background: active ? COLORS.blueDim : "transparent",
+      border: `1px solid ${active ? COLORS.blue : "transparent"}`,
+      borderRadius: 8,
+      color: active ? COLORS.blue : COLORS.textMuted,
+      fontSize: 13,
+      fontWeight: active ? 600 : 400,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      transition: "all 0.15s ease",
+      whiteSpace: "nowrap",
+    }}
+  >
+    <span style={{ fontSize: 15 }}>{icon}</span>
+    {children}
+  </button>
+);
+
+const StatusBadge = ({ status }) => {
+  // Release status (GA / Preview) is not shown: it goes stale. See the guide's note.
+  if (status === "GA" || status === "Preview") return null;
+  const map = {
+    GA: { bg: COLORS.greenDim, color: COLORS.green, border: "#2D6B3F" },
+    Preview: { bg: COLORS.amberDim, color: COLORS.amber, border: "#7A5C0A" },
+    "Read-Only": { bg: COLORS.blueDim, color: COLORS.blue, border: "#2A5298" },
+    "Write-Capable": { bg: COLORS.coralDim, color: COLORS.coral, border: "#8C2E24" },
+  };
+  const s = map[status] || map.GA;
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "2px 8px",
+        borderRadius: 4,
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: "0.04em",
+        background: s.bg,
+        color: s.color,
+        border: `1px solid ${s.border}`,
+      }}
+    >
+      {status}
+    </span>
+  );
+};
+</script>
+
+<script type="text/babel">
+/* @jsxRuntime classic */
+
+// ─── DIAGRAM 1: Lab 10 Architecture ────────────────────────────
+function Lab10Architecture() {
+  return (
+    <div style={{ padding: 32 }}>
+      <div style={{ marginBottom: 32 }}>
+        <h2 style={{ color: COLORS.text, fontSize: 22, fontWeight: 700, margin: 0 }}>
+          From Data to Agent — Architecture Building Blocks
+        </h2>
+        <p style={{ color: COLORS.textMuted, fontSize: 14, margin: "8px 0 0", lineHeight: 1.5 }}>
+          BigQuery + Knowledge Catalog + Column-Level Security + BigQuery Graph + ADK
+        </p>
+      </div>
+
+      <LayerContainer label="Participant" color={COLORS.purple} dimColor={COLORS.purpleDim}>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <ArchBox icon="⌨" title="Terminal" sub="agy CLI + bash" color={COLORS.purple} />
+          <ArchBox icon="🌐" title="Browser" sub="lab console" color={COLORS.purple} />
+        </div>
+      </LayerContainer>
+
+      <FlowArrow labels={["HTTPS", "agy -i prompts"]} />
+
+      <LayerContainer label="Cloud Run · us-central1" color={COLORS.blue} dimColor={COLORS.blueDim}>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <ArchBox
+            icon="🟢"
+            title="lab-runner"
+            sub="lab console (FastAPI), public"
+            detail="SA: lab-runner-sa"
+            badge="Fine-Grained Reader = sees real email"
+            badgeColor={COLORS.green}
+            color={COLORS.blue}
+          />
+          <ArchBox
+            icon="🔴"
+            title="ecommerce-agent"
+            sub="ADK + FastAPI, private"
+            detail="SA: ecommerce-analyst-agent"
+            badge="Masked Reader = sees XXXXX@example.com"
+            badgeColor={COLORS.coral}
+            color={COLORS.coral}
+          />
+        </div>
+      </LayerContainer>
+
+      <FlowArrow labels={["MCP tools (read-only)"]} />
+
+      <LayerContainer label="Remote MCP Servers · Google-hosted" color={COLORS.amber} dimColor={COLORS.amberDim} statusBadge="Preview">
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <ArchBox
+            icon="📊"
+            title="BigQuery MCP"
+            sub="bigquery.googleapis.com/mcp"
+            detail="list_dataset_ids, get_dataset_info, list_table_ids, get_table_info, execute_sql_readonly"
+            badge="execute_sql EXCLUDED"
+            badgeColor={COLORS.coral}
+            color={COLORS.amber}
+          />
+          <ArchBox
+            icon="📚"
+            title="Knowledge Catalog MCP"
+            sub="dataplex.googleapis.com/mcp"
+            detail="lookup_entry, lookup_context"
+            badge="search_entries EXCLUDED → scoped local tool"
+            badgeColor={COLORS.coral}
+            color={COLORS.amber}
+          />
+        </div>
+      </LayerContainer>
+
+      <FlowArrow labels={["queries", "reads catalog"]} />
+
+      <LayerContainer label="Data Platform · US multi-region" color={COLORS.green} dimColor={COLORS.greenDim}>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <ArchBox
+            icon="🗃"
+            title="BigQuery"
+            sub="ecommerce_lab"
+            detail="customers · orders · products"
+            badge2="ecommerce_graph_lab — BigQuery Property Graph"
+            badge2Status="GA"
+            color={COLORS.green}
+          />
+          <ArchBox
+            icon="📖"
+            title="Knowledge Catalog"
+            sub="glossary: ecommerce-business-terms"
+            detail="Revenue · High Value Customer · Order Status"
+            color={COLORS.green}
+          />
+          <ArchBox
+            icon="🔒"
+            title="Policy Tags"
+            sub="PII Classification"
+            detail="SENSITIVE → customers.email"
+            badge="FGR → real | Masked → XXXXX@ | Neither → ACCESS DENIED"
+            badgeColor={COLORS.coral}
+            color={COLORS.green}
+          />
+        </div>
+      </LayerContainer>
+
+      <div
+        style={{
+          marginTop: 24,
+          padding: "16px 20px",
+          background: `linear-gradient(135deg, ${COLORS.blueDim}44, ${COLORS.purpleDim}44)`,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 10,
+          borderLeft: `3px solid ${COLORS.blue}`,
+        }}
+      >
+        <p style={{ color: COLORS.textMuted, fontSize: 13, margin: 0, lineHeight: 1.6 }}>
+          <strong style={{ color: COLORS.blue }}>Principle 1 — Structural Enforcement:</strong>{" "}
+          The agent service (ecommerce-agent) can only call <code style={{ color: COLORS.amber }}>execute_sql_readonly</code>.
+          Write capability is physically absent from its tool set — not instructed away, but structurally impossible.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── DIAGRAM 2: Lab 10 ERD ─────────────────────────────────────
+function Lab10ERD() {
+  return (
+    <div style={{ padding: 32 }}>
+      <div style={{ marginBottom: 32 }}>
+        <h2 style={{ color: COLORS.text, fontSize: 22, fontWeight: 700, margin: 0 }}>
+          From Data to Agent — Entity Relationship Diagram
+        </h2>
+        <p style={{ color: COLORS.textMuted, fontSize: 14, margin: "8px 0 0" }}>
+          BigQuery ecommerce_lab + ecommerce_graph_lab + Knowledge Catalog + Policy Tags
+        </p>
+      </div>
+
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 32, justifyContent: "center" }}>
+        <ERDTable
+          name="customers"
+          color={COLORS.purple}
+          fields={[
+            { name: "customer_id", type: "STRING", pk: true },
+            { name: "name", type: "STRING" },
+            { name: "email", type: "STRING", tag: "SENSITIVE" },
+            { name: "segment", type: "STRING" },
+            { name: "lifetime_value", type: "FLOAT64" },
+            { name: "created_at", type: "TIMESTAMP" },
+          ]}
+        />
+        <ERDTable
+          name="products"
+          color={COLORS.teal}
+          fields={[
+            { name: "product_id", type: "STRING", pk: true },
+            { name: "name", type: "STRING" },
+            { name: "category", type: "STRING" },
+            { name: "price", type: "FLOAT64" },
+            { name: "description", type: "STRING" },
+          ]}
+        />
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "center", gap: 80, marginBottom: 8 }}>
+        <span style={{ color: COLORS.textDim, fontSize: 12 }}>1:N places ↓</span>
+        <span style={{ color: COLORS.textDim, fontSize: 12 }}>1:N ordered in ↓</span>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 32 }}>
+        <ERDTable
+          name="orders"
+          color={COLORS.blue}
+          fields={[
+            { name: "order_item_id", type: "STRING", pk: true, note: "unique" },
+            { name: "customer_id", type: "STRING", fk: "customers" },
+            { name: "product_id", type: "STRING", fk: "products" },
+            { name: "order_id", type: "STRING", note: "NOT unique" },
+            { name: "total_amount", type: "FLOAT64" },
+            { name: "status", type: "STRING" },
+            { name: "order_date", type: "DATE" },
+          ]}
+        />
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "8px 0 24px" }}>
+        <div style={{ flex: 1, height: 1, background: COLORS.border }} />
+        <span style={{ color: COLORS.textDim, fontSize: 11, letterSpacing: "0.08em", fontWeight: 600 }}>GOVERNED BY</span>
+        <div style={{ flex: 1, height: 1, background: COLORS.border }} />
+      </div>
+
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 220px", padding: 20, background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 10, borderTop: `3px solid ${COLORS.amber}` }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.amber, marginBottom: 8 }}>Glossary Terms · Knowledge Catalog</div>
+          <div style={{ fontFamily: "monospace", fontSize: 12, color: COLORS.textMuted, lineHeight: 1.8 }}>
+            <div>Revenue <span style={{ color: COLORS.textDim }}>— SUM WHERE Complete</span></div>
+            <div>High Value Customer <span style={{ color: COLORS.textDim }}>— top decile ≥ $52.12</span></div>
+            <div>Order Status <span style={{ color: COLORS.textDim }}>— 5 values, case-sensitive</span></div>
+          </div>
+        </div>
+        <div style={{ flex: "1 1 200px", padding: 20, background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 10, borderTop: `3px solid ${COLORS.coral}` }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.coral, marginBottom: 8 }}>Policy Tag · PII Classification</div>
+          <div style={{ fontFamily: "monospace", fontSize: 12, color: COLORS.textMuted, lineHeight: 1.8 }}>
+            <div>Taxonomy <span style={{ color: COLORS.textDim }}>PII Classification - &lt;project&gt;</span></div>
+            <div>Tag <span style={{ color: COLORS.textDim }}>SENSITIVE</span></div>
+            <div>Target <span style={{ color: COLORS.textDim }}>customers.email</span></div>
+            <div>Mask <span style={{ color: COLORS.textDim }}>EMAIL_MASK</span></div>
+          </div>
+        </div>
+        <div style={{ flex: "1 1 220px", padding: 20, background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 10, borderTop: `3px solid ${COLORS.green}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.green }}>BigQuery Property Graph</span>
+            <StatusBadge status="GA" />
+          </div>
+          <div style={{ fontFamily: "monospace", fontSize: 12, color: COLORS.textMuted, lineHeight: 1.8 }}>
+            <div><span style={{ color: COLORS.teal }}>NODE</span> Customer <span style={{ color: COLORS.textDim }}>KEY: customer_id</span></div>
+            <div><span style={{ color: COLORS.teal }}>NODE</span> Product <span style={{ color: COLORS.textDim }}>KEY: product_id</span></div>
+            <div><span style={{ color: COLORS.purple }}>EDGE</span> PURCHASED <span style={{ color: COLORS.textDim }}>KEY: order_item_id</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+</script>
+
+<script type="text/babel">
+/* @jsxRuntime classic */
+
+// ─── DIAGRAM 3: Lab 10 Sequence ────────────────────────────────
+function Lab10Sequence() {
+  const actors = ["Participant", "Terminal (agy)", "lab-runner", "ecommerce-agent", "Knowledge Catalog"];
+  const actorColors = [COLORS.purple, COLORS.teal, COLORS.blue, COLORS.coral, COLORS.amber];
+
+  return (
+    <div style={{ padding: 32 }}>
+      <div style={{ marginBottom: 32 }}>
+        <h2 style={{ color: COLORS.text, fontSize: 22, fontWeight: 700, margin: 0 }}>
+          From Data to Agent — Catalog Grounding Sequence
+        </h2>
+        <p style={{ color: COLORS.textMuted, fontSize: 14, margin: "8px 0 0" }}>
+          Delete → Halt → Restore → Recover: the halt condition working as designed
+        </p>
+      </div>
+
+      <div style={{ display: "flex", gap: 0, marginBottom: 0 }}>
+        {actors.map((a, i) => (
+          <div key={i} style={{ flex: 1, textAlign: "center", padding: "10px 4px", background: `${actorColors[i]}18`, borderBottom: `2px solid ${actorColors[i]}`, borderRadius: "8px 8px 0 0", fontSize: 12, fontWeight: 600, color: actorColors[i] }}>
+            {a}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ position: "relative", background: `${COLORS.surface}88`, borderRadius: "0 0 10px 10px", border: `1px solid ${COLORS.border}`, borderTop: "none" }}>
+        <PhaseLabel text="Phase 1 · Governed Answer" color={COLORS.green} />
+        <SeqRow from={0} to={2} label={'Ask: "What is our revenue?"'} total={5} />
+        <SeqRow from={2} to={3} label="POST /chat (fresh session)" total={5} solid />
+        <SeqRow from={3} to={4} label="search_entries('revenue', scope=project)" total={5} />
+        <SeqRow from={4} to={3} label="Revenue term found ✓" total={5} dashed />
+        <SeqRow from={3} to={2} label={`${GOVERNED_REVENUE} (WHERE status='Complete')`} total={5} dashed />
+        <SeqRow from={2} to={0} label="Shows governed revenue" total={5} dashed />
+
+        <Annotation text="This is the governed answer. Now watch what happens when the term is removed." color={COLORS.amber} />
+
+        <PhaseLabel text="Phase 2 · Catalog Disruption → Agent Halt" color={COLORS.coral} />
+        <SeqRow from={0} to={1} label="Delete the Revenue term" total={5} />
+        <SeqRow from={1} to={4} label="gcloud dataplex glossaries terms delete" total={5} />
+        <SeqRow from={0} to={2} label="Ask again (same question)" total={5} />
+        <SeqRow from={2} to={3} label="POST /chat (NEW fresh session)" total={5} solid />
+        <SeqRow from={3} to={4} label="search_entries('revenue', scope=project)" total={5} />
+        <SeqRow from={4} to={3} label="0 results (scoped)" total={5} dashed />
+
+        <Annotation
+          text='HALT: the agent stops and asks the user to confirm a definition rather than guessing. This is the halt condition working as designed.'
+          color={COLORS.coral}
+          icon="⛔"
+        />
+
+        <PhaseLabel text="Phase 3 · Restore → Full Recovery" color={COLORS.green} />
+        <SeqRow from={0} to={1} label="Restore the Revenue term" total={5} />
+        <SeqRow from={1} to={4} label="gcloud dataplex glossaries terms create" total={5} />
+        <SeqRow from={0} to={2} label="Ask a third time" total={5} />
+        <SeqRow from={2} to={3} label="POST /chat (NEW fresh session)" total={5} solid />
+        <SeqRow from={3} to={2} label={`${GOVERNED_REVENUE} returns ✓`} total={5} dashed />
+        <SeqRow from={2} to={0} label="Catalog is the source of truth" total={5} dashed />
+      </div>
+
+      <div style={{ marginTop: 20, padding: "14px 18px", background: `${COLORS.greenDim}44`, border: `1px solid ${COLORS.greenDim}`, borderRadius: 10, borderLeft: `3px solid ${COLORS.green}` }}>
+        <p style={{ color: COLORS.textMuted, fontSize: 13, margin: 0, lineHeight: 1.6 }}>
+          <strong style={{ color: COLORS.green }}>Key Proof:</strong>{" "}
+          The agent never caches, memorizes, or guesses. Each session starts fresh. When the catalog term is absent, the agent halts rather than fabricating. This is structural grounding — not an instruction to "check the catalog first."
+        </p>
+      </div>
+    </div>
+  );
+}
+
+</script>
+
+<script type="text/babel">
+/* @jsxRuntime classic */
+
+// ─── Shared Components ─────────────────────────────────────────
+
+function LayerContainer({ label, color, dimColor, children, statusBadge }) {
+  return (
+    <div style={{ padding: 20, background: `${dimColor}22`, border: `1px solid ${dimColor}`, borderRadius: 12, marginBottom: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+        <div style={{ width: 3, height: 18, background: color, borderRadius: 2 }} />
+        <span style={{ fontSize: 13, fontWeight: 700, color, letterSpacing: "0.01em" }}>{label}</span>
+        {statusBadge && <StatusBadge status={statusBadge} />}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ArchBox({ icon, title, sub, detail, badge, badgeColor, color, badge2, badge2Status, compact }) {
+  return (
+    <div style={{
+      flex: compact ? "0 1 auto" : "1 1 200px",
+      padding: compact ? "10px 16px" : "14px 18px",
+      background: COLORS.surface,
+      border: `1px solid ${COLORS.border}`,
+      borderRadius: 10,
+      borderLeft: `3px solid ${color}`,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: compact ? 0 : 6 }}>
+        <span style={{ fontSize: 16 }}>{icon}</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.text }}>{title}</span>
+      </div>
+      {sub && <div style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 2 }}>{sub}</div>}
+      {detail && <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 4, fontFamily: "monospace" }}>{detail}</div>}
+      {badge && (
+        <div style={{ fontSize: 10, color: badgeColor || COLORS.textMuted, marginTop: 6, padding: "3px 6px", background: `${(badgeColor || COLORS.textMuted)}18`, borderRadius: 4, display: "inline-block" }}>
+          {badge}
+        </div>
+      )}
+      {badge2 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+          <span style={{ fontSize: 11, color: COLORS.textMuted }}>{badge2}</span>
+          {badge2Status && <StatusBadge status={badge2Status} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FlowArrow({ labels }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, padding: "8px 0" }}>
+      <div style={{ width: 1, height: 20, background: COLORS.border }} />
+      {labels.map((l, i) => (
+        <span key={i} style={{ fontSize: 11, color: COLORS.textDim }}>{i > 0 ? " · " : ""}{l}</span>
+      ))}
+      <div style={{ width: 1, height: 20, background: COLORS.border }} />
+    </div>
+  );
+}
+
+function ERDTable({ name, color, fields }) {
+  return (
+    <div style={{ minWidth: 260, maxWidth: 340, flex: "1 1 260px", borderRadius: 10, overflow: "hidden", border: `1px solid ${COLORS.border}` }}>
+      <div style={{ padding: "10px 16px", background: color, textAlign: "center" }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{name}</span>
+      </div>
+      <div style={{ padding: "8px 0", background: COLORS.surface }}>
+        {fields.map((f, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", padding: "4px 14px", gap: 6, fontFamily: "monospace", fontSize: 12 }}>
+            {f.pk && <span style={{ color: COLORS.amber, fontSize: 10, fontWeight: 700 }}>PK</span>}
+            {f.fk && <span style={{ color: COLORS.teal, fontSize: 10, fontWeight: 700 }}>FK</span>}
+            {!f.pk && !f.fk && <span style={{ width: 16 }} />}
+            <span style={{ color: COLORS.text, flex: 1 }}>{f.name}</span>
+            <span style={{ color: COLORS.textDim, fontSize: 11 }}>{f.type}</span>
+            {f.tag && <span style={{ fontSize: 9, fontWeight: 700, color: COLORS.coral, background: COLORS.coralDim, padding: "1px 5px", borderRadius: 3 }}>{f.tag}</span>}
+            {f.note && <span style={{ fontSize: 10, color: COLORS.textDim }}>({f.note})</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PhaseLabel({ text, color }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", borderBottom: `1px solid ${COLORS.border}` }}>
+      <div style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />
+      <span style={{ fontSize: 12, fontWeight: 700, color, letterSpacing: "0.02em" }}>{text}</span>
+    </div>
+  );
+}
+
+function SeqRow({ from, to, label, total, dashed, solid }) {
+  const left = Math.min(from, to);
+  const right = Math.max(from, to);
+  const isReverse = to < from;
+  return (
+    <div style={{ display: "flex", padding: "6px 16px", alignItems: "center" }}>
+      {Array.from({ length: total }).map((_, i) => {
+        const isInRange = i >= left && i <= right;
+        const isEnd = i === to;
+        return (
+          <div key={i} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", height: 24 }}>
+            <div style={{ position: "absolute", top: 0, bottom: 0, width: 1, background: `${COLORS.border}66` }} />
+            {isInRange && i < right && (
+              <div style={{ position: "absolute", top: "50%", left: "50%", right: "-50%", height: dashed ? 0 : 2, borderTop: dashed ? `1px dashed ${COLORS.textDim}` : `2px solid ${solid ? COLORS.blue : COLORS.textDim}`, transform: "translateY(-50%)" }} />
+            )}
+            {isInRange && i > left && i <= right && (
+              <div style={{ position: "absolute", top: "50%", right: "50%", left: "-50%", height: dashed ? 0 : 2, borderTop: dashed ? `1px dashed ${COLORS.textDim}` : `2px solid ${solid ? COLORS.blue : COLORS.textDim}`, transform: "translateY(-50%)" }} />
+            )}
+            {isEnd && (
+              <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", fontSize: 10, color: solid ? COLORS.blue : COLORS.textDim }}>
+                {isReverse ? "◀" : "▶"}
+              </div>
+            )}
+            {i === Math.floor((from + to) / 2) && (
+              <div style={{ position: "absolute", top: -12, fontSize: 10, color: solid ? COLORS.blue : COLORS.textMuted, whiteSpace: "nowrap", fontWeight: solid ? 600 : 400, background: COLORS.surface, padding: "0 4px" }}>
+                {label}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Annotation({ text, color, icon }) {
+  return (
+    <div style={{ margin: "8px 16px", padding: "10px 14px", background: `${color}12`, border: `1px solid ${color}44`, borderRadius: 8, display: "flex", gap: 8, alignItems: "flex-start" }}>
+      {icon && <span style={{ fontSize: 14 }}>{icon}</span>}
+      <span style={{ fontSize: 11, color, lineHeight: 1.5 }}>{text}</span>
+    </div>
+  );
+}
+
+// ─── Main App ──────────────────────────────────────────────────
+
+const TABS = [
+  { id: "arch", label: "Architecture", icon: "🏗", component: Lab10Architecture },
+  { id: "erd", label: "Data Model", icon: "🗃", component: Lab10ERD },
+  { id: "seq", label: "Grounding Sequence", icon: "⏱", component: Lab10Sequence },
+];
+
+function App() {
+  const [activeTab, setActiveTab] = useState("arch");
+  const ActiveComponent = TABS.find((t) => t.id === activeTab)?.component || Lab10Architecture;
+
+  return (
+    <div style={{ minHeight: "100vh", background: COLORS.bg, color: COLORS.text, fontFamily: "'Inter', -apple-system, system-ui, sans-serif" }}>
+      <div style={{ padding: "24px 32px 0", borderBottom: `1px solid ${COLORS.border}` }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 4 }}>
+          <h1 style={{ fontSize: 18, fontWeight: 800, color: COLORS.text, margin: 0, letterSpacing: "-0.02em" }}>
+            Agentic Data Cloud
+          </h1>
+          <span style={{ fontSize: 12, color: COLORS.textDim, fontWeight: 500 }}>From Data to Agent Reference Diagrams</span>
+        </div>
+        <div style={{ display: "flex", gap: 6, paddingTop: 12, overflowX: "auto", paddingBottom: 0 }}>
+          {TABS.map((t) => (
+            <TabButton key={t.id} active={activeTab === t.id} onClick={() => setActiveTab(t.id)} icon={t.icon}>
+              {t.label}
+            </TabButton>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1100, margin: "0 auto", paddingBottom: 40 }}>
+        <ActiveComponent />
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>

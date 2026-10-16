@@ -1,0 +1,45 @@
+{# Reusable building blocks for step screens. No explanatory prose here:
+   the guide says what to look for; the console only labels. The ⓘ tip says
+   what a button DOES (actions.TIPS), never what its result means. #}
+
+{% macro info(slug) -%}
+{% set t = TIPS.get(slug) %}
+{% if t %}
+<span class="info">
+  <button type="button" class="info-btn" aria-label="What this button does" aria-describedby="tip-{{ slug }}">i</button>
+  <span class="info-pop" role="tooltip" id="tip-{{ slug }}">
+    <span class="info-who">{{ t.who }}</span>
+    <span class="info-does">{{ t.does }}</span>
+    <span class="info-effect {{ 'info-effect-ro' if t.effect == 'read-only' else 'info-effect-rw' }}">{{ t.effect }}</span>
+  </span>
+</span>
+{% endif %}
+{%- endmacro %}
+
+{% macro action(slug, label, primary=true, note='', form='') -%}
+<div class="action">
+  <div class="action-row">
+    <button type="button" class="btn {{ 'btn-primary' if primary else 'btn-ghost' }}"
+            data-action="{{ slug }}" data-target="r-{{ slug }}"{% if form %} data-form="{{ form }}"{% endif %}>{{ label }}</button>
+    {{ info(slug) }}
+    {% if note %}<span class="muted">{{ note }}</span>{% endif %}
+  </div>
+  <div id="r-{{ slug }}" class="result" aria-live="polite"></div>
+</div>
+{%- endmacro %}
+
+{% macro card(title, sub='') -%}
+<section class="card">
+  <h2>{{ title }}{% if sub %} <span class="card-sub">{{ sub }}</span>{% endif %}</h2>
+  {{ caller() }}
+</section>
+{%- endmacro %}
+
+{# A hand-off to the workstation: the command itself lives in the guide. #}
+{% macro terminal(text, ref) -%}
+<div class="handoff">
+  <span class="handoff-icon">🖥️</span>
+  <span><b>In your terminal:</b> {{ text }}</span>
+  <span class="handoff-ref">guide {{ ref }}</span>
+</div>
+{%- endmacro %}

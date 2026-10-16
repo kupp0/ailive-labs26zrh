@@ -1,0 +1,19 @@
+# ==============================================================================
+# Lab 11 — transactional agent dependencies
+# ==============================================================================
+# Both engines are reached through their managed MCP servers, so this service
+# needs ADK's MCP extra and NO database client library. That is not an
+# optimisation: a client library here would be a second, unaudited path to a
+# write, and the tool_filter guardrail would no longer be the only one.
+#
+# The `mcp` pin matters: google-adk requires mcp>=1.24,<2, and mcp 2.x fails at
+# import with "cannot import name 'McpHttpClientFactory'".
+google-adk[mcp]>=2.5.0
+mcp>=1.24,<2
+
+google-auth>=2.30.0
+requests>=2.32
+
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7

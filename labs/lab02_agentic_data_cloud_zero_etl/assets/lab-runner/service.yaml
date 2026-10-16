@@ -1,0 +1,71 @@
+# ==============================================================================
+# Lab 11 — lab console Cloud Run service (FastAPI, stateless)
+#
+# Runs as lab11-runner-sa, the account that stands in for the PARTICIPANT. It
+# reads everything a participant may read — including customers.email unmasked,
+# which is what makes the masking panel a comparison rather than an assertion —
+# and it holds no write role on AlloyDB or Spanner.
+#
+# It is given bigquery.dataEditor on the zero-ETL dataset ALONE, so it can
+# re-declare the unified property graph when the declaration DDL did not take. It is
+# deliberately NOT given that on Lab 10's ecommerce_lab.
+# ==============================================================================
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ${RUNNER_SERVICE}
+  annotations:
+    run.googleapis.com/launch-stage: BETA
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/execution-environment: gen2
+        autoscaling.knative.dev/maxScale: "3"
+    spec:
+      serviceAccountName: ${RUNNER_SA}
+      timeoutSeconds: 900
+      containers:
+        - name: lab-runner
+          image: ${RUNNER_IMAGE}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GOOGLE_CLOUD_PROJECT
+              value: "${PROJECT_ID}"
+            - name: AGENT_URL
+              value: "${AGENT_URL}"
+            - name: TRANSACT_URL
+              value: "${TRANSACT_URL}"
+            - name: BQ_SOURCE_DATASET_ID
+              value: "${BQ_SOURCE_DATASET_ID}"
+            - name: BQ_ZEROETL_DATASET_ID
+              value: "${BQ_ZEROETL_DATASET_ID}"
+            - name: BQ_SPANNER_DATASET_ID
+              value: "${BQ_SPANNER_DATASET_ID}"
+            - name: SPANNER_INSTANCE
+              value: "${SPANNER_INSTANCE}"
+            - name: SPANNER_DATABASE
+              value: "${SPANNER_DATABASE}"
+            - name: ALLOYDB_CLUSTER
+              value: "${ALLOYDB_CLUSTER}"
+            - name: ALLOYDB_ENABLED
+              value: "${ALLOYDB_ENABLED}"
+            - name: GLOSSARY_LOCATION
+              value: "${GLOSSARY_LOCATION}"
+            - name: DISPATCH_SA
+              value: "${AGENT_SA}"
+            - name: TRANSACT_SA
+              value: "${TRANSACT_SA}"
+            - name: RUNNER_SA
+              value: "${RUNNER_SA}"
+            - name: LAB10_CONSOLE_URL
+              value: "${LAB10_CONSOLE_URL}"
+            - name: GE_PUBLISHER_URL
+              value: "${GE_PUBLISHER_URL}"
+          resources:
+            limits:
+              cpu: "1"
+              # No pandas/pyarrow. Raise if the Step 9
+              # benchmark ever OOMs.
+              memory: 512Mi

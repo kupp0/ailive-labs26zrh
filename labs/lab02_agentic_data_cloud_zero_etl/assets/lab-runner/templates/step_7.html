@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% from "macros.html" import action, card %}
+{% block content %}
+{% call card("Query the unified view") %}
+{{ action("s7-unified", "Query the unified view", note="origin · written_by · rows · revenue") }}
+{% endcall %}
+{% call card("Ask the agent the same thing") %}
+{{ action("s7-ask", "Ask the agent", primary=false) }}
+{% endcall %}
+{% endblock %}

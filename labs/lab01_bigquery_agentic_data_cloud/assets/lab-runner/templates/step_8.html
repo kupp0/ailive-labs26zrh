@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% from "macros.html" import action, card %}
+{% block content %}
+{% call card("1 · Same query, two identities") %}
+{{ action("s8-both", "Run the same query as both identities") }}
+{% endcall %}
+{% call card("2 · Try to talk it past the control") %}
+{{ action("s8-argue", "Try it", primary=false) }}
+{% endcall %}
+{% endblock %}

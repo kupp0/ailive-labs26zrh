@@ -1,0 +1,59 @@
+# ==============================================================================
+# Lab 11 — transactional agent Cloud Run service
+#
+# Two lines in this file carry the whole write-separation argument.
+#
+#   serviceAccountName: lab11-transact-sa
+#       Holds alloydb.client, alloydb.databaseUser and spanner.databaseUser, and
+#       is registered as an AlloyDB IAM user with INSERT on `orders`. It holds NO
+#       BigQuery data role at all — ask this agent for revenue and it fails at
+#       the platform.
+#
+#   (absent) allUsers
+#       This service is never made public. Only lab11-dispatch-sa holds
+#       run.invoker on it, so the write path is reachable only by going through
+#       the router. A participant's own curl is refused.
+# ==============================================================================
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ${TRANSACT_SERVICE}
+  annotations:
+    run.googleapis.com/launch-stage: BETA
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/execution-environment: gen2
+        autoscaling.knative.dev/maxScale: "3"
+    spec:
+      serviceAccountName: ${TRANSACT_SA}
+      timeoutSeconds: 600
+      containers:
+        - name: transact
+          image: ${TRANSACT_IMAGE}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GOOGLE_CLOUD_PROJECT
+              value: "${PROJECT_ID}"
+            - name: GOOGLE_CLOUD_LOCATION
+              value: "global"
+            - name: GOOGLE_GENAI_USE_VERTEXAI
+              value: "true"
+            - name: ALLOYDB_REGION
+              value: "${ALLOYDB_REGION}"
+            - name: ALLOYDB_CLUSTER
+              value: "${ALLOYDB_CLUSTER}"
+            - name: ALLOYDB_INSTANCE
+              value: "${ALLOYDB_INSTANCE}"
+            - name: ALLOYDB_DATABASE
+              value: "${ALLOYDB_DATABASE}"
+            - name: SPANNER_INSTANCE
+              value: "${SPANNER_INSTANCE}"
+            - name: SPANNER_DATABASE
+              value: "${SPANNER_DATABASE}"
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi
