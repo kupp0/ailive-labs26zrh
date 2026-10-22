@@ -42,7 +42,8 @@ Expose the Cloud Run ADK agents from Labs 1 and 2 to business users through **Ge
 .
 ├── README.md                        # Repository overview, architecture, and deployment guide
 ├── event-manifest.json              # Declarative manifest of selected labs, skills, and MCP servers
-├── projects.txt.example             # Template mapping GCP project IDs to participant IAM identities
+├── projects.txt                     # Dummy template mapping GCP project IDs to participant IAM identities
+├── projects.txt.example             # Backup copy of the dummy template
 ├── deploy.sh                        # CLI wrapper entrypoint for the parallel provisioning engine
 ├── deploy.py                        # Parallel Terraform orchestrator (apply, plan, check, handoff, destroy)
 ├── warmup.sh                        # CLI wrapper for Cloud Workstations warm-up and idle timeout management
@@ -153,19 +154,19 @@ gcloud auth login
 gcloud auth application-default login
 ```
 
-### 3. Configure `projects.txt`
-`projects.txt` is intentionally ignored by Git (`.gitignore`) so real project IDs and user email addresses are never committed. Copy the template file to create your local mapping:
+### 3. Configure `projects.txt` (or `projects.local.txt`)
+`projects.txt` in the repository contains a dummy template showing the exact required format (`PROJECT_ID, IAP_MEMBER, REGION, ROLE`). To avoid accidentally committing real project IDs or email addresses to Git, copy `projects.txt` to `projects.local.txt` (which is ignored by `.gitignore` and automatically preferred by `deploy.py` when present), or edit `projects.txt` directly:
 
 ```bash
-cp projects.txt.example projects.txt
+cp projects.txt projects.local.txt
 ```
 
-Edit `projects.txt` and specify **1 Admin Project** (`role=admin`) and **at least 1 Participant Project** (`role=participant`):
+Specify **1 Admin Project** (`role=admin`) and **at least 1 Participant Project** (`role=participant`):
 
 ```text
 # Format: PROJECT_ID, IAP_MEMBER, REGION, ROLE
-my-admin-project-id, user:your-admin@example.com, us-central1, role=admin
-my-sandbox-project-01, user:participant@example.com, us-central1, role=participant
+my-gcp-admin-project-00, admin@example.com, us-central1, role=admin
+my-gcp-participant-project-01, participant01@example.com, us-central1, role=participant
 ```
 
 > **Tip — Deploying with a Single GCP Project**:

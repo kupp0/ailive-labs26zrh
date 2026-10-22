@@ -1,0 +1,24 @@
+# ==============================================================================
+# Event Participant Project Mapping (Dummy Template)
+# Format: PROJECT_ID, IAP_MEMBER, REGION, ROLE
+#
+# ⚠️ ATTENTION: This event includes labs that need a dedicated Admin Project
+# (for the shared BigQuery Enterprise Graph slot reservation).
+# Exactly ONE project MUST be designated 'role=admin'. It hosts event-wide
+# infrastructure contributed by the selected labs and is provisioned before,
+# and destroyed after, every participant project.
+#
+# 🚨 CRITICAL SECURITY & OPERATIONAL NOTICE:
+# - NEVER distribute the Admin Project (role=admin) credentials to participants!
+# - Minimum 2 projects: exactly 1 role=admin and at least 1 role=participant.
+# - Trailing fields are order-independent key=value tokens (role=..., city=...).
+# - Tip: Copy this file to `projects.local.txt` (ignored by git) for your real
+#   deployment so you never accidentally commit live project IDs or emails.
+# ==============================================================================
+
+# --- Admin Project (Required: exactly 1 project with role=admin) ---
+my-gcp-admin-project-00, admin@example.com, us-central1, role=admin
+
+# --- Participant Projects (At least 1 project with role=participant) ---
+my-gcp-participant-project-01, participant01@example.com, us-central1, role=participant
+my-gcp-participant-project-02, participant02@example.com, us-central1, role=participant

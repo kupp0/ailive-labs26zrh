@@ -18,7 +18,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 
 STATE_FILE = ".deploy_state.json"
-PROJECTS_FILE = "projects.txt"
+PROJECTS_FILE = "projects.local.txt" if os.path.exists("projects.local.txt") else "projects.txt"
 WORKDIR_BASE = ".deploy_workdirs"
 PLUGIN_CACHE_DIR = ".terraform_plugin_cache"
 

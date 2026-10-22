@@ -1,9 +1,11 @@
 # ==============================================================================
 # 1. Event Participant & Project Mappings (Sensitive / Local Only)
 # ==============================================================================
-# Never commit live participant project IDs or email mappings.
-# Use projects.txt.example as a template and copy it to projects.txt locally.
-projects.txt
+# `projects.txt` in the repo contains a sanitized dummy template.
+# Store real participant project lists in `projects.local.txt` (auto-detected by deploy.py).
+projects.local.txt
+projects.*.txt
+!projects.txt
 !projects.txt.example
 
 # ==============================================================================
