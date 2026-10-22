@@ -1,0 +1,49 @@
+# ==============================================================================
+# 1. Event Participant & Project Mappings (Sensitive / Local Only)
+# ==============================================================================
+# Never commit live participant project IDs or email mappings.
+# Use projects.txt.example as a template and copy it to projects.txt locally.
+projects.txt
+!projects.txt.example
+
+# ==============================================================================
+# 2. Data Forge Orchestrator State, Workdirs, Logs & Bundles
+# ==============================================================================
+.deploy_state.json
+.deploy_workdirs/
+.terraform_plugin_cache/
+deploy_logs/
+assets.zip
+
+# ==============================================================================
+# 3. Terraform State, Plans, Caches & Local Overrides
+# ==============================================================================
+**/.terraform/
+*.tfstate
+*.tfstate.*
+errored.tfstate
+tfplan
+*.tfplan
+crash.log
+crash.*.log
+.terraform.lock.hcl
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# ==============================================================================
+# 4. Python, Virtual Environments, OS & Editor Artifacts
+# ==============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+.env.*
+.DS_Store
+*.swp
+*~

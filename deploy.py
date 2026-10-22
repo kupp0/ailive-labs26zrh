@@ -514,7 +514,7 @@ def parse_and_validate_projects(auto_yes=False):
     if not os.path.exists(PROJECTS_FILE):
         logging.error(f"Projects file not found: {PROJECTS_FILE}")
         print(f"{COLOR_RED}❌ ERROR: {PROJECTS_FILE} not found.{COLOR_RESET}")
-        print("Please ensure the target repository has been scaffolded.")
+        print("Copy projects.txt.example to projects.txt and populate your target GCP projects.")
         sys.exit(1)
         
     raw_entries = []

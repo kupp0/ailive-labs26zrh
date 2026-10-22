@@ -14,7 +14,7 @@ variable "region" {
 variable "max_slots" {
   description = "Autoscale ceiling for the cohort-wide graph-lab reservation. Shared by every participant; must be a positive multiple of 100."
   type        = number
-  default     = 200
+  default     = 500
 
   validation {
     condition     = var.max_slots % 100 == 0 && var.max_slots > 0

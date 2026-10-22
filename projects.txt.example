@@ -1,8 +1,12 @@
 # ==============================================================================
-# Event Participant Project Mapping
+# Event Participant Project Mapping (Template)
 # Format: PROJECT_ID, IAP_MEMBER, REGION, ROLE
 #
-# ⚠️ ATTENTION: This event includes labs that need a dedicated Admin Project.
+# Copy this file to `projects.txt` before running `./deploy.sh`:
+#   cp projects.txt.example projects.txt
+#
+# ⚠️ ATTENTION: This event includes labs that need a dedicated Admin Project
+# (for the shared BigQuery Enterprise Graph slot reservation).
 # Exactly ONE project MUST be designated 'role=admin'. It hosts event-wide
 # infrastructure contributed by the selected labs and is provisioned before,
 # and destroyed after, every participant project.
@@ -13,7 +17,7 @@
 # - Trailing fields are order-independent key=value tokens (role=..., city=...).
 #
 # Examples:
-#   my-admin-project, admin@gcplab.me, us-central1, role=admin
-#   my-participant-project-01, user:participant01@gcplab.me, us-central1, role=participant
-#   my-participant-project-02, user:participant02@gcplab.me, us-central1, role=participant
+#   my-admin-project, admin@example.com, us-central1, role=admin
+#   my-participant-project-01, user:participant01@example.com, us-central1, role=participant
+#   my-participant-project-02, user:participant02@example.com, us-central1, role=participant
 # ==============================================================================

@@ -39,9 +39,16 @@ warn() { printf '  %s⚠%s  %s\n' "${C_YELLOW}" "${C_OFF}" "$1"; }
 die()  { printf '\n%s✗ %s%s\n\n' "${C_RED}" "$1" "${C_OFF}"; exit 1; }
 
 LABEL="${LABEL:-AlloyDB SQL}"
-MCP_URL="${ALLOYDB_MCP_URL:-https://alloydb.googleapis.com/mcp}"
+if [ -n "${ALLOYDB_MCP_URL:-}" ]; then
+    MCP_URL="${ALLOYDB_MCP_URL}"
+elif [ -n "${ALLOYDB_REGION:-}" ]; then
+    MCP_URL="https://alloydb.${ALLOYDB_REGION}.rep.googleapis.com/mcp"
+else
+    MCP_URL="https://alloydb.googleapis.com/mcp"
+fi
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-15}"
 SLEEP_SECONDS="${SLEEP_SECONDS:-20}"
+ALLOW_FAILURE="${ALLOW_FAILURE:-0}"
 
 say "${LABEL}"
 
@@ -154,11 +161,12 @@ RETRYABLE = (
     "not ready", "pending", "creating", "unavailable", "try again",
     "deadline exceeded", "rate limit", "quota", "internal error",
     "503", "500", "connection refused", "does not exist yet",
+    "invalid authentication credentials", "unauthenticated",
 )
 
 def verdict(message, code=None):
     low = message.lower()
-    if any(k in low for k in RETRYABLE) or code in (429, 500, 503):
+    if any(k in low for k in RETRYABLE) or code in (401, 429, 500, 503):
         print("RETRY " + message[:400].replace("\n", " "))
         sys.exit(2)
     print("ERROR " + message[:800].replace("\n", " "))
@@ -209,7 +217,16 @@ while IFS= read -r STATEMENT; do
 
     ATTEMPT=1
     while :; do
-        TOKEN="$(gcloud auth print-access-token 2>/dev/null || true)"
+        TOKEN=""
+        if [ "${ATTEMPT}" -eq 1 ] && [ -n "${GOOGLE_OAUTH_ACCESS_TOKEN:-}" ]; then
+            TOKEN="${GOOGLE_OAUTH_ACCESS_TOKEN}"
+        fi
+        if [ -z "${TOKEN}" ]; then
+            TOKEN="$(gcloud auth application-default print-access-token 2>/dev/null || true)"
+        fi
+        if [ -z "${TOKEN}" ]; then
+            TOKEN="$(gcloud auth print-access-token 2>/dev/null || true)"
+        fi
         [ -n "${TOKEN}" ] || die \
 "Could not mint an access token on the deployment host. Run:
       gcloud auth application-default login"
@@ -240,6 +257,10 @@ while IFS= read -r STATEMENT; do
         if [ "${ATTEMPT}" -ge "${MAX_ATTEMPTS}" ]; then
             printf '\n  %slast response (HTTP %s):%s\n' "${C_RED}" "${HTTP_CODE}" "${C_OFF}"
             printf '      %s\n' "${VERDICT#RETRY }"
+            if [ "${ALLOW_FAILURE}" = "1" ]; then
+                warn "${LABEL}: statement ${STATEMENT_NO} still failing after ${MAX_ATTEMPTS} attempts; continuing because ALLOW_FAILURE=1"
+                break
+            fi
             die "${LABEL}: statement ${STATEMENT_NO} still failing after ${MAX_ATTEMPTS} attempts.
 
   If this says the tool or its arguments are unknown, the MCP surface has moved.

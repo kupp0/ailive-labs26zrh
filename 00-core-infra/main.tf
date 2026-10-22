@@ -101,11 +101,10 @@ resource "google_workstations_workstation_config" "default" {
 
   # The 20-minute default shut workstations down mid-exercise whenever a
   # participant spent a while reading the guide, and a cold start costs several
-  # minutes. 4 hours outlasts a lab segment AND a lunch break, so participants
-  # come back to a running workstation instead of a cold start; the trade-off is
-  # up to 4 idle billable hours per participant. The 12-hour hard cap means a
-  # workstation forgotten at the end of the day still stops billing overnight.
-  idle_timeout    = "14400s"
+  # minutes. 8 hours allows pre-warming workstations hours before the event start
+  # and keeping them online across the entire event day. The 12-hour hard cap means
+  # a workstation forgotten at the end of the day still stops billing overnight.
+  idle_timeout    = "28800s"
   running_timeout = "43200s"
 
   host {
